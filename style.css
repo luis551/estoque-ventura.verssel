@@ -192,3 +192,22 @@ table td { padding: 8px 5px; vertical-align: middle; }
 .status-ok { background: #dcfce7; color: #2ecc71; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; display:block; text-align:center; }
 .status-falta { background: #fee2e2; color: #e74c3c; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; display:block; text-align:center; }
 .status-sobra { background: #e0f2fe; color: #3498db; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; display:block; text-align:center; }
+/* ESTILO DA BARRA LATERAL */
+.sidebar {
+    width: 250px; background: #2c3e50; color: white;
+    position: fixed; top: 0; left: 0; bottom: 0;
+    padding: 20px; display: flex; flex-direction: column; z-index: 100;
+}
+.logo-area { font-size: 1.5rem; font-weight: bold; margin-bottom: 30px; text-align: center; }
+.nav-btn {
+    background: transparent; border: none; color: #bdc3c7;
+    padding: 15px; text-align: left; width: 100%; cursor: pointer;
+    border-radius: 8px; font-size: 1rem; margin-bottom: 5px;
+    display: flex; align-items: center; gap: 10px;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+.nav-btn.active { background: #4070f4; color: white; font-weight: bold; }
+
+/* EMPURRAR O CONTEÚDO PRA DIREITA QUANDO LOGAR */
+body.logado .container { margin-left: 250px; width: calc(100% - 250px); }
+body.logado .header { width: 100%; }

@@ -12,11 +12,36 @@ const firebaseConfig = {
   appId: "1:859531094118:web:21ebe937b5ed851160a5a7",
   measurementId: "G-7NV7DY9FV6"
 };
+// --- VARIÁVEIS DAS LOJAS ---
+let currentLoja = 'estoque_ventura'; // Começa na Ventura
+let unsubscribe = null; // Serve para parar de carregar a loja antiga
 
-// Inicializa o Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const produtosRef = collection(db, "produtos");
+// --- FUNÇÃO PARA TROCAR DE LOJA ---
+window.trocarLoja = function(novaLoja) {
+    currentLoja = novaLoja;
+    
+    // Atualiza visual dos botões
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    if(novaLoja.includes('ventura')) document.getElementById('btn-ventura').classList.add('active');
+    if(novaLoja.includes('contento')) document.getElementById('btn-contento').classList.add('active');
+
+    // Troca o título lá em cima
+    const titulos = { 'estoque_ventura': 'Loja Ventura', 'estoque_contento': 'Loja Contento' };
+    const tituloEl = document.querySelector('.title');
+    if(tituloEl) tituloEl.innerHTML = titulos[novaLoja] || 'Estoque';
+
+    // Para de ouvir a loja antiga e conecta na nova
+    if(unsubscribe) unsubscribe();
+    
+    const novaRef = collection(db, currentLoja);
+    unsubscribe = onSnapshot(novaRef, (snapshot) => {
+        itens = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        // Ordena por nome
+        itens.sort((a,b) => (a.nome || "").localeCompare(b.nome || ""));
+        renderizarInterface();
+    });
+}
+
 
 // --- VARIÁVEIS GLOBAIS ---
 let itens = [];
@@ -27,11 +52,7 @@ let users = JSON.parse(localStorage.getItem('estoquePro_users')) || [
     { user: 'Expeto', pass: '1511', isAdmin: true, canEdit: true }
 ];
 
-// --- SINCRONIZAÇÃO EM TEMPO REAL ---
-onSnapshot(produtosRef, (snapshot) => {
-    itens = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-    renderizarInterface();
-});
+
 
 // --- FUNÇÕES DE LOGIN (PRESA AO WINDOW) ---
 window.fazerLogin = function() {
@@ -90,7 +111,7 @@ window.salvarProduto = async function() {
     try {
         if (id) {
             // Update
-            const docRef = doc(db, "produtos", id);
+            const docRef = doc(db, currentLoja, id);
             await updateDoc(docRef, { nome, categoria: cat, min, preco });
         } else {
             // Create
@@ -107,48 +128,83 @@ window.salvarProduto = async function() {
 }
 
 window.deletarProduto = async function(id) {
-    if(!currentUser || !currentUser.canEdit) return;
-    if (confirm("Deletar item PERMANENTEMENTE?")) {
-        await deleteDoc(doc(db, "produtos", id));
+    // 1. Verifica se tem permissão
+    if(!currentUser || !currentUser.canEdit) return alert("Sem permissão!");
+
+    // 2. Confirmação de segurança
+    if (confirm("Tem certeza que deseja apagar este produto desta loja?")) {
+        try {
+            // 3. Deleta da LOJA ATUAL (currentLoja)
+            await deleteDoc(doc(db, currentLoja, id));
+        } catch (e) {
+            alert("Erro ao apagar: " + e.message);
+        }
     }
 }
 
 window.atualizarValor = async function(id, campo, valor) {
+    // 1. Trata o valor (se for 'real' vazio, fica vazio, senão vira número)
     const valFinal = (campo === 'real' && valor === '') ? '' : (parseInt(valor) || 0);
-    const docRef = doc(db, "produtos", id);
-    // Atualiza apenas o campo modificado no banco
-    await updateDoc(docRef, { [campo]: valFinal });
+    
+    // 2. Pega a referência do documento na LOJA ATUAL
+    const docRef = doc(db, currentLoja, id);
+    
+    // 3. Atualiza só aquele campo no Firebase
+    try {
+        await updateDoc(docRef, { [campo]: valFinal });
+    } catch (e) {
+        console.error("Erro ao atualizar:", e);
+    }
 }
 
 window.fecharSemana = async function() {
-    if(!currentUser || !currentUser.isAdmin) return alert("Apenas Admin fecha a semana!");
-    if(!confirm("📅 FECHAR SEMANA?\n\nO Estoque 'SISTEMA' virará o 'INICIAL'.\nEntradas e Vendas zeram.\nConfirma?")) return;
+    // 1. Segurança de Admin
+    if(!currentUser || !currentUser.isAdmin) return alert("Apenas Admin pode fechar a semana!");
 
-    const batch = writeBatch(db);
-
-    itens.forEach(i => {
-        const docRef = doc(db, "produtos", i.id);
-        const ini = i.initial || 0;
-        const ent = i.entry || 0;
-        const sale = i.sales || 0;
-        const int = i.internal || 0;
-        const vou = i.voucher || 0;
-        const dam = i.damage || 0;
-        
-        let novoInicial = ini + ent - sale - int - vou - dam;
-        if (i.real !== '' && i.real !== undefined) novoInicial = parseInt(i.real);
-
-        batch.update(docRef, {
-            initial: novoInicial,
-            entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: ''
-        });
-    });
+    // 2. Confirmação mostrando o nome da loja
+    const nomeLoja = currentLoja === 'estoque_ventura' ? 'VENTURA' : 'CONTENTO';
+    if(!confirm(`⚠️ ATENÇÃO MESTRE!\n\nVocê vai fechar o caixa da loja ${nomeLoja}.\n\nO estoque 'REAL' ou 'SISTEMA' virará o novo INICIAL.\nEntradas e Vendas serão zeradas.\n\nConfirma?`)) return;
 
     try {
+        const batch = writeBatch(db); // Prepara o pacote de atualizações
+
+        // 3. Passa item por item da lista atual
+        itens.forEach(i => {
+            const docRef = doc(db, currentLoja, i.id);
+
+            // Calcula o estoque final atual
+            const ini = i.initial || 0;
+            const ent = i.entry || 0;
+            const sale = i.sales || 0;
+            const int = i.internal || 0;
+            const vou = i.voucher || 0;
+            const dam = i.damage || 0;
+            
+            let novoInicial = ini + ent - sale - int - vou - dam;
+
+            // Se tiver contagem REAL, ela manda em tudo
+            if (i.real !== '' && i.real !== undefined) {
+                novoInicial = parseInt(i.real);
+            }
+
+            // Define o reset para a próxima semana
+            batch.update(docRef, {
+                initial: novoInicial,
+                entry: 0,
+                sales: 0,
+                internal: 0,
+                voucher: 0,
+                damage: 0,
+                real: '' // Limpa o campo real
+            });
+        });
+
+        // 4. Envia tudo pro Firebase
         await batch.commit();
-        alert("✅ Semana Fechada!");
+        alert(`✅ Semana da loja ${nomeLoja} fechada com sucesso!`);
+
     } catch(e) {
-        alert("Erro: " + e.message);
+        alert("Erro ao fechar semana: " + e.message);
     }
 }
 
