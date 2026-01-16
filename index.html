@@ -3,51 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estoque Ventura - Online</title>
+    <title>Estoque Ventura - Multi-Lojas</title>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<aside class="sidebar" id="sidebarLoja" style="display:none;">
-    <div class="logo-area">📦 GESTÃO</div>
-    <nav class="nav-menu">
-        <p class="nav-label">SELECIONE A LOJA</p>
-        <button class="nav-btn active" id="btn-ventura" onclick="window.trocarLoja('estoque_ventura')">
-            <i class='bx bxs-store'></i> Ventura
-        </button>
-        <button class="nav-btn" id="btn-contento" onclick="window.trocarLoja('estoque_contento')">
-            <i class='bx bxs-building-house'></i> Contento
-        </button>
-        
-        <p class="nav-label" style="margin-top:20px;">SISTEMA</p>
-        <button class="nav-btn logout-btn" onclick="window.fazerLogout()">Sair</button>
-    </nav>
-</aside>
+
     <div id="login-screen">
         <div class="login-box">
-            <h2>🔐 Área Restrita</h2>
-            <p>Estoque Ventura</p>
-            <input type="text" id="loginUser" placeholder="Usuário" class="login-input">
+            <h2>🔐 Acesso Restrito</h2>
+            <p>Selecione seu Usuário</p>
+            <input type="text" id="loginUser" placeholder="Usuário (Ex: Expeto)" class="login-input">
             <input type="password" id="loginPass" placeholder="Senha" class="login-input">
-            <button onclick="window.fazerLogin()" class="btn-login">Entrar</button>
+            <button onclick="window.fazerLogin()" class="btn-login">Entrar no Sistema</button>
             <p id="loginMsg" style="color:red; margin-top:10px;"></p>
         </div>
     </div>
 
+    <aside class="sidebar" id="sidebarLoja" style="display:none;">
+        <div class="logo-area">
+            <i class='bx bxs-box'></i> GESTÃO
+        </div>
+        
+        <nav class="nav-menu">
+            <p class="nav-label">LOJAS DISPONÍVEIS</p>
+            
+            <button class="nav-btn active" id="btn-ventura" onclick="window.trocarLoja('estoque_ventura')">
+                <i class='bx bxs-store'></i> Ventura
+            </button>
+            
+            <button class="nav-btn" id="btn-contento" onclick="window.trocarLoja('estoque_contento')">
+                <i class='bx bxs-building-house'></i> Contento
+            </button>
+            
+            <p class="nav-label" style="margin-top:20px;">SISTEMA</p>
+            
+            <button class="nav-btn admin-btn" id="btnAdminSide" onclick="window.abrirAdmin()" style="display:none; color:#f1c40f;">
+                <i class='bx bxs-crown'></i> Admin Usuários
+            </button>
+
+            <button class="nav-btn logout-btn" onclick="window.fazerLogout()">
+                <i class='bx bx-log-out'></i> Sair
+            </button>
+        </nav>
+    </aside>
+
     <div class="container" id="app-content" style="display:none;">
         <header class="header">
-            <h1 class="title">Estoque Ventura <span style="font-size:0.5em; color:#27ae60;">(Online)</span></h1>
-            <div class="header-actions">
-                <button id="btnAdmin" class="btn-admin" onclick="window.abrirAdmin()" style="display:none;">👑 Admin</button>
-                <button onclick="window.fazerLogout()" class="btn-logout" style="background:#e74c3c; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">Sair</button>
+            <div>
+                <h1 class="title" id="tituloLoja">Carregando...</h1>
+                <p style="color:#666; font-size:0.9rem;">Status: <span style="color:green; font-weight:bold;">Online</span> 🟢</p>
             </div>
         </header>
 
         <section class="resume-grid">
             <div class="resume-card card-blue">
                 <div class="card-info">
-                    <h3>Itens Cadastrados</h3>
+                    <h3>Itens na Loja</h3>
                     <p class="big-number" id="totalItens">0</p>
                 </div>
                 <i class='bx bx-package icon-bg'></i>
@@ -70,7 +83,7 @@
 
         <main class="main-content">
             <div class="actions-bar">
-                <h2>Gerenciar Produtos</h2>
+                <h2 id="subtituloLoja">Produtos</h2>
                 <div style="display:flex; gap:10px;">
                     <button class="btn-audit" onclick="window.verDivergencias()">⚠️ Ver Divergências</button>
                     <button class="btn-week" onclick="window.fecharSemana()">📅 Fechar Semana</button>
@@ -83,16 +96,16 @@
                     <thead>
                         <tr style="font-size: 0.8rem; text-transform: uppercase;">
                             <th style="width: 200px;">Produto</th>
-                            <th style="text-align:center; width:60px;" title="Inicial">INI (+)</th>
-                            <th style="text-align:center; width:60px;" title="Entrada">ENT (+)</th>
-                            <th style="text-align:center; width:60px;" title="Venda">VENDA (-)</th>
-                            <th style="text-align:center; width:60px;" title="Consumo Interno">CONS (-)</th>
-                            <th style="text-align:center; width:60px;" title="Vale Funcionário">VALE (-)</th>
-                            <th style="text-align:center; width:60px;" title="Avaria/Perda">AVARIA (-)</th>
-                            <th style="text-align:center; width:60px; background:#f0f0f0;">SIST</th>
-                            <th style="text-align:center; width:80px; background:#fffbe6; border:2px solid #f1c40f;">REAL</th>
-                            <th style="text-align:center;">Status</th>
-                            <th style="text-align:center;">Ações</th>
+                            <th class="th-center" title="Inicial">INI (+)</th>
+                            <th class="th-center" title="Entrada">ENT (+)</th>
+                            <th class="th-center" title="Venda">VENDA (-)</th>
+                            <th class="th-center" title="Consumo Interno">CONS (-)</th>
+                            <th class="th-center" title="Vale Funcionário">VALE (-)</th>
+                            <th class="th-center" title="Avaria/Perda">AVARIA (-)</th>
+                            <th class="th-center" style="background:#f0f0f0;">SIST</th>
+                            <th class="th-center" style="background:#fffbe6; border:2px solid #f1c40f;">REAL</th>
+                            <th class="th-center">Status</th>
+                            <th class="th-center">Ações</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -111,11 +124,11 @@
                 <input type="hidden" id="m_id">
                 <div class="form-group">
                     <label>Nome do Produto</label>
-                    <input type="text" id="m_nome" placeholder="Ex: Poção de Cura">
+                    <input type="text" id="m_nome" placeholder="Ex: HEINEKEN">
                 </div>
                 <div class="form-group">
                     <label>Categoria</label>
-                    <input type="text" id="m_categoria" placeholder="Ex: Consumíveis">
+                    <input type="text" id="m_categoria" placeholder="Ex: CERVEJAS">
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -123,7 +136,7 @@
                         <input type="number" id="m_qtd" placeholder="0">
                     </div>
                     <div class="form-group">
-                        <label>Estoque Mínimo (Alerta)</label>
+                        <label>Mínimo (Alerta)</label>
                         <input type="number" id="m_min" placeholder="5">
                     </div>
                 </div>
@@ -142,20 +155,19 @@
     <div class="modal-overlay" id="modalAdmin">
         <div class="modal-box">
             <div class="modal-header">
-                <h2>👑 Gestão de Usuários</h2>
+                <h2>👑 Usuários</h2>
                 <button class="btn-close" onclick="window.fecharAdmin()"><i class='bx bx-x'></i></button>
             </div>
             <div class="modal-body">
-                <div style="background:#f8f9fa; padding:15px; margin-bottom:15px; border-radius:8px;">
-                    <h3>Adicionar Usuário</h3>
+                <div style="background:#f8f9fa; padding:15px; border-radius:8px;">
+                    <h3>Novo Usuário</h3>
                     <div style="display:grid; grid-template-columns: 1fr 1fr auto; gap:10px;">
-                        <input type="text" id="new_user" placeholder="User" style="padding:8px;">
-                        <input type="text" id="new_pass" placeholder="Senha" style="padding:8px;">
+                        <input type="text" id="new_user" placeholder="User">
+                        <input type="text" id="new_pass" placeholder="Senha">
                         <button class="btn-save" onclick="window.adicionarUsuario()">Add</button>
                     </div>
                 </div>
-                <h3>Usuários Ativos</h3>
-                <table id="tabelaUsers" style="width:100%;">
+                <table id="tabelaUsers" style="width:100%; margin-top:15px;">
                     <thead><tr><th>User</th><th>Edit?</th><th>Adm?</th><th>Del</th></tr></thead>
                     <tbody></tbody>
                 </table>
@@ -166,15 +178,14 @@
     <div class="modal-overlay" id="modalRelatorio">
         <div class="modal-box">
             <div class="modal-header">
-                <h2>📉 Relatório de Divergências</h2>
+                <h2>📉 Divergências</h2>
                 <button class="btn-close" onclick="window.fecharRelatorio()"><i class='bx bx-x'></i></button>
             </div>
             <div class="modal-body">
-                <p style="margin-bottom:15px; color:#666;">Itens que não batem com o sistema:</p>
                 <ul id="listaDivergencias" style="list-style:none; max-height:300px; overflow-y:auto;"></ul>
             </div>
             <div class="modal-footer">
-                <button class="btn-save" onclick="window.fecharRelatorio()">Entendido</button>
+                <button class="btn-save" onclick="window.fecharRelatorio()">OK</button>
             </div>
         </div>
     </div>

@@ -1,8 +1,8 @@
-// --- IMPORTAÇÕES DO FIREBASE (CDN) ---
+// --- IMPORTAÇÕES DO FIREBASE ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-// --- CONFIGURAÇÃO DO SEU PROJETO ---
+// --- SUAS CONFIGURAÇÕES ---
 const firebaseConfig = {
   apiKey: "AIzaSyA5JBf4DcZghGXZWnLYdlMCOBd9As36Czw",
   authDomain: "estoque-ventura-3ddf3.firebaseapp.com",
@@ -12,49 +12,55 @@ const firebaseConfig = {
   appId: "1:859531094118:web:21ebe937b5ed851160a5a7",
   measurementId: "G-7NV7DY9FV6"
 };
-// --- VARIÁVEIS DAS LOJAS ---
-let currentLoja = 'estoque_ventura'; // Começa na Ventura
-let unsubscribe = null; // Serve para parar de carregar a loja antiga
 
-// --- FUNÇÃO PARA TROCAR DE LOJA ---
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// --- ESTADO GLOBAL ---
+let itens = [];
+let currentUser = null;
+let currentLoja = 'estoque_ventura'; // Começa na Ventura
+let unsubscribe = null; // Para parar de ouvir a loja antiga
+
+// Usuários (Local Storage)
+let users = JSON.parse(localStorage.getItem('estoquePro_users')) || [
+    { user: 'Expeto', pass: '1511', isAdmin: true, canEdit: true }
+];
+
+// --- 1. FUNÇÃO PARA TROCAR DE LOJA (AS ABAS) ---
 window.trocarLoja = function(novaLoja) {
     currentLoja = novaLoja;
     
-    // Atualiza visual dos botões
+    // Atualiza visual dos botões (Abas)
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     if(novaLoja.includes('ventura')) document.getElementById('btn-ventura').classList.add('active');
     if(novaLoja.includes('contento')) document.getElementById('btn-contento').classList.add('active');
 
     // Troca o título lá em cima
-    const titulos = { 'estoque_ventura': 'Loja Ventura', 'estoque_contento': 'Loja Contento' };
-    const tituloEl = document.querySelector('.title');
-    if(tituloEl) tituloEl.innerHTML = titulos[novaLoja] || 'Estoque';
+    const titulos = { 'estoque_ventura': 'LOJA VENTURA', 'estoque_contento': 'LOJA CONTENTO' };
+    const nomeLoja = titulos[novaLoja] || 'ESTOQUE';
+    
+    const tituloEl = document.getElementById('tituloLoja');
+    if(tituloEl) tituloEl.innerHTML = nomeLoja;
+    
+    const subTituloEl = document.getElementById('subtituloLoja');
+    if(subTituloEl) subTituloEl.innerHTML = `Produtos (${nomeLoja})`;
 
-    // Para de ouvir a loja antiga e conecta na nova
+    // Desconecta da loja antiga e conecta na nova
     if(unsubscribe) unsubscribe();
     
+    // ATENÇÃO: Aqui definimos qual coleção do banco vamos usar!
     const novaRef = collection(db, currentLoja);
+    
     unsubscribe = onSnapshot(novaRef, (snapshot) => {
         itens = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        // Ordena por nome
+        // Ordena por nome (A-Z)
         itens.sort((a,b) => (a.nome || "").localeCompare(b.nome || ""));
         renderizarInterface();
     });
 }
 
-
-// --- VARIÁVEIS GLOBAIS ---
-let itens = [];
-let currentUser = null;
-
-// Usuários (Local Storage - Mantido para simplicidade neste momento)
-let users = JSON.parse(localStorage.getItem('estoquePro_users')) || [
-    { user: 'Expeto', pass: '1511', isAdmin: true, canEdit: true }
-];
-
-
-
-// --- FUNÇÕES DE LOGIN (PRESA AO WINDOW) ---
+// --- 2. LOGIN ---
 window.fazerLogin = function() {
     const u = document.getElementById('loginUser').value;
     const p = document.getElementById('loginPass').value;
@@ -62,15 +68,182 @@ window.fazerLogin = function() {
 
     if (found) {
         currentUser = found;
+        
+        // Esconde login e mostra sistema
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-content').style.display = 'block';
-        document.getElementById('btnAdmin').style.display = found.isAdmin ? 'block' : 'none';
-        renderizarInterface();
+        document.getElementById('sidebarLoja').style.display = 'flex'; // Mostra a barra lateral
+        document.body.classList.add('logado'); // Ajusta CSS
+
+        // Permissões de Admin na Sidebar
+        const btnAdm = document.getElementById('btnAdminSide');
+        if(btnAdm) btnAdm.style.display = found.isAdmin ? 'flex' : 'none';
+        
+        // Inicia na Loja Ventura
+        window.trocarLoja('estoque_ventura');
     } else {
         document.getElementById('loginMsg').innerText = "Senha incorreta!";
     }
 }
 window.fazerLogout = function() { location.reload(); }
+
+// --- 3. SALVAR (CRIAR OU EDITAR) CORRIGIDO ---
+window.salvarProduto = async function() {
+    const id = document.getElementById('m_id').value;
+    const nome = document.getElementById('m_nome').value.toUpperCase();
+    const cat = document.getElementById('m_categoria').value.toUpperCase() || 'GERAL';
+    const qtdIni = parseInt(document.getElementById('m_qtd').value) || 0;
+    const min = parseInt(document.getElementById('m_min').value) || 1;
+    const preco = parseFloat(document.getElementById('m_preco').value) || 0;
+
+    if (!nome) return alert("Preencha o nome!");
+
+    try {
+        if (id) {
+            // EDITAR: Usa currentLoja
+            const docRef = doc(db, currentLoja, id);
+            await updateDoc(docRef, { nome, categoria: cat, min, preco });
+        } else {
+            // CRIAR: Usa currentLoja
+            await addDoc(collection(db, currentLoja), {
+                nome, categoria: cat, initial: qtdIni, min, preco,
+                entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: ''
+            });
+        }
+        window.fecharModal();
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao salvar: " + e.message);
+    }
+}
+
+// --- 4. DELETAR CORRIGIDO ---
+window.deletarProduto = async function(id) {
+    if(!currentUser || !currentUser.canEdit) return alert("Sem permissão!");
+    
+    if (confirm("Apagar produto desta loja?")) {
+        try {
+            // Deleta da coleção atual
+            await deleteDoc(doc(db, currentLoja, id));
+        } catch (e) {
+            alert("Erro ao apagar: " + e.message);
+        }
+    }
+}
+
+// --- 5. ATUALIZAR VALOR (PLANILHA) CORRIGIDO ---
+window.atualizarValor = async function(id, campo, valor) {
+    const valFinal = (campo === 'real' && valor === '') ? '' : (parseInt(valor) || 0);
+    const docRef = doc(db, currentLoja, id);
+    
+    try {
+        await updateDoc(docRef, { [campo]: valFinal });
+    } catch(e) { console.error(e); }
+}
+
+// --- 6. FECHAR SEMANA CORRIGIDO ---
+window.fecharSemana = async function() {
+    if(!currentUser || !currentUser.isAdmin) return alert("Apenas Admin!");
+    
+    const nomeLoja = currentLoja === 'estoque_ventura' ? 'VENTURA' : 'CONTENTO';
+    if(!confirm(`⚠️ FECHAR CAIXA DA LOJA ${nomeLoja}?\n\nO estoque REAL vira o INICIAL.\nEntradas/Saídas zeram.\n\nConfirma?`)) return;
+
+    try {
+        const batch = writeBatch(db);
+
+        itens.forEach(i => {
+            const docRef = doc(db, currentLoja, i.id);
+            const ini = i.initial || 0;
+            const ent = i.entry || 0;
+            const sale = i.sales || 0;
+            const int = i.internal || 0;
+            const vou = i.voucher || 0;
+            const dam = i.damage || 0;
+            
+            let novoInicial = ini + ent - sale - int - vou - dam;
+            if (i.real !== '' && i.real !== undefined) novoInicial = parseInt(i.real);
+
+            batch.update(docRef, {
+                initial: novoInicial,
+                entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: ''
+            });
+        });
+
+        await batch.commit();
+        alert(`✅ Semana da ${nomeLoja} fechada!`);
+    } catch(e) {
+        alert("Erro: " + e.message);
+    }
+}
+
+// --- RENDERIZAÇÃO ---
+function renderizarInterface() {
+    // Totais
+    document.getElementById('totalItens').innerText = itens.length;
+    
+    const valorTotal = itens.reduce((acc, i) => {
+        const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
+        return acc + (sist * i.preco);
+    }, 0);
+    document.getElementById('valorTotal').innerText = valorTotal.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+
+    const alertas = itens.filter(i => {
+        const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
+        return sist <= i.min;
+    }).length;
+    document.getElementById('alertasBaixos').innerText = alertas;
+
+    // Tabela
+    const tbody = document.querySelector('#tabelaProdutos tbody');
+    tbody.innerHTML = '';
+
+    if (itens.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:30px; color:#999;">Nenhum produto nesta loja.<br>Clique em "+ Novo Item".</td></tr>';
+        return;
+    }
+
+    itens.forEach(item => {
+        const ini = item.initial || 0;
+        const ent = item.entry || 0;
+        const sale = item.sales || 0;
+        const int = item.internal || 0;
+        const vou = item.voucher || 0;
+        const dam = item.damage || 0;
+        const sist = ini + ent - sale - int - vou - dam;
+        
+        let statusHtml = '<span style="color:#ccc">-</span>';
+        if (item.real !== '' && item.real !== undefined) {
+            const real = parseInt(item.real);
+            const diff = real - sist;
+            if (diff === 0) statusHtml = '<span class="status-ok">✅ OK</span>';
+            else if (diff > 0) statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
+            else statusHtml = `<span class="status-falta">❌ -${Math.abs(diff)}</span>`;
+        }
+
+        const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
+        
+        const acoes = (currentUser && currentUser.canEdit) 
+            ? `<button class="btn-action" title="Editar" onclick="window.abrirModal('${item.id}')">✏️</button>
+               <button class="btn-action" title="Apagar" style="color:#e74c3c;" onclick="window.deletarProduto('${item.id}')">🗑️</button>`
+            : '<small>🔒</small>';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${item.nome}</strong></td>
+            <td class="th-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td>
+            <td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>
+            <td><input type="number" class="input-cell" value="${sale}" onchange="window.atualizarValor('${item.id}', 'sales', this.value)" ${readonly}></td>
+            <td><input type="number" class="input-cell" value="${int}" onchange="window.atualizarValor('${item.id}', 'internal', this.value)" ${readonly}></td>
+            <td><input type="number" class="input-cell" value="${vou}" onchange="window.atualizarValor('${item.id}', 'voucher', this.value)" ${readonly}></td>
+            <td><input type="number" class="input-cell" value="${dam}" onchange="window.atualizarValor('${item.id}', 'damage', this.value)" ${readonly}></td>
+            <td><span class="text-sistema">${sist}</span></td>
+            <td><input type="number" class="input-cell input-real" value="${item.real !== undefined ? item.real : ''}" placeholder="-" onchange="window.atualizarValor('${item.id}', 'real', this.value)" ${readonly}></td>
+            <td>${statusHtml}</td>
+            <td class="th-center">${acoes}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
 
 // --- FUNÇÕES DE MODAL ---
 const modal = document.getElementById('modalProduto');
@@ -97,183 +270,7 @@ window.abrirModal = function(editId = null) {
 window.fecharModal = function() { modal.classList.remove('active'); limparCampos(); }
 function limparCampos() { document.querySelectorAll('#modalProduto input').forEach(i => i.value = ''); }
 
-// --- CRUD FIREBASE ---
-window.salvarProduto = async function() {
-    const id = document.getElementById('m_id').value;
-    const nome = document.getElementById('m_nome').value;
-    const cat = document.getElementById('m_categoria').value || '-';
-    const qtdIni = parseInt(document.getElementById('m_qtd').value) || 0;
-    const min = parseInt(document.getElementById('m_min').value) || 1;
-    const preco = parseFloat(document.getElementById('m_preco').value) || 0;
-
-    if (!nome) return alert("Preencha o nome!");
-
-    try {
-        if (id) {
-            // Update
-            const docRef = doc(db, currentLoja, id);
-            await updateDoc(docRef, { nome, categoria: cat, min, preco });
-        } else {
-            // Create
-            await addDoc(produtosRef, {
-                nome, categoria: cat, initial: qtdIni, min, preco,
-                entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: ''
-            });
-        }
-        window.fecharModal();
-    } catch (e) {
-        console.error(e);
-        alert("Erro ao salvar no banco!");
-    }
-}
-
-window.deletarProduto = async function(id) {
-    // 1. Verifica se tem permissão
-    if(!currentUser || !currentUser.canEdit) return alert("Sem permissão!");
-
-    // 2. Confirmação de segurança
-    if (confirm("Tem certeza que deseja apagar este produto desta loja?")) {
-        try {
-            // 3. Deleta da LOJA ATUAL (currentLoja)
-            await deleteDoc(doc(db, currentLoja, id));
-        } catch (e) {
-            alert("Erro ao apagar: " + e.message);
-        }
-    }
-}
-
-window.atualizarValor = async function(id, campo, valor) {
-    // 1. Trata o valor (se for 'real' vazio, fica vazio, senão vira número)
-    const valFinal = (campo === 'real' && valor === '') ? '' : (parseInt(valor) || 0);
-    
-    // 2. Pega a referência do documento na LOJA ATUAL
-    const docRef = doc(db, currentLoja, id);
-    
-    // 3. Atualiza só aquele campo no Firebase
-    try {
-        await updateDoc(docRef, { [campo]: valFinal });
-    } catch (e) {
-        console.error("Erro ao atualizar:", e);
-    }
-}
-
-window.fecharSemana = async function() {
-    // 1. Segurança de Admin
-    if(!currentUser || !currentUser.isAdmin) return alert("Apenas Admin pode fechar a semana!");
-
-    // 2. Confirmação mostrando o nome da loja
-    const nomeLoja = currentLoja === 'estoque_ventura' ? 'VENTURA' : 'CONTENTO';
-    if(!confirm(`⚠️ ATENÇÃO MESTRE!\n\nVocê vai fechar o caixa da loja ${nomeLoja}.\n\nO estoque 'REAL' ou 'SISTEMA' virará o novo INICIAL.\nEntradas e Vendas serão zeradas.\n\nConfirma?`)) return;
-
-    try {
-        const batch = writeBatch(db); // Prepara o pacote de atualizações
-
-        // 3. Passa item por item da lista atual
-        itens.forEach(i => {
-            const docRef = doc(db, currentLoja, i.id);
-
-            // Calcula o estoque final atual
-            const ini = i.initial || 0;
-            const ent = i.entry || 0;
-            const sale = i.sales || 0;
-            const int = i.internal || 0;
-            const vou = i.voucher || 0;
-            const dam = i.damage || 0;
-            
-            let novoInicial = ini + ent - sale - int - vou - dam;
-
-            // Se tiver contagem REAL, ela manda em tudo
-            if (i.real !== '' && i.real !== undefined) {
-                novoInicial = parseInt(i.real);
-            }
-
-            // Define o reset para a próxima semana
-            batch.update(docRef, {
-                initial: novoInicial,
-                entry: 0,
-                sales: 0,
-                internal: 0,
-                voucher: 0,
-                damage: 0,
-                real: '' // Limpa o campo real
-            });
-        });
-
-        // 4. Envia tudo pro Firebase
-        await batch.commit();
-        alert(`✅ Semana da loja ${nomeLoja} fechada com sucesso!`);
-
-    } catch(e) {
-        alert("Erro ao fechar semana: " + e.message);
-    }
-}
-
-// --- RENDERIZAÇÃO ---
-function renderizarInterface() {
-    // Totais
-    document.getElementById('totalItens').innerText = itens.length;
-    
-    const valorTotal = itens.reduce((acc, i) => {
-        const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
-        return acc + (sist * i.preco);
-    }, 0);
-    document.getElementById('valorTotal').innerText = valorTotal.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
-
-    const alertas = itens.filter(i => {
-        const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
-        return sist <= i.min;
-    }).length;
-    document.getElementById('alertasBaixos').innerText = alertas;
-
-    // Tabela
-    const tbody = document.querySelector('#tabelaProdutos tbody');
-    tbody.innerHTML = '';
-
-    itens.forEach(item => {
-        const ini = item.initial || 0;
-        const ent = item.entry || 0;
-        const sale = item.sales || 0;
-        const int = item.internal || 0;
-        const vou = item.voucher || 0;
-        const dam = item.damage || 0;
-        const sist = ini + ent - sale - int - vou - dam;
-        
-        let statusHtml = '<span style="color:#ccc">-</span>';
-        if (item.real !== '' && item.real !== undefined) {
-            const real = parseInt(item.real);
-            const diff = real - sist;
-            if (diff === 0) statusHtml = '<span class="status-ok">✅ OK</span>';
-            else if (diff > 0) statusHtml = `<span class="status-sobra">⚠️ SOBRA ${diff}</span>`;
-            else statusHtml = `<span class="status-falta">❌ FALTA ${Math.abs(diff)}</span>`;
-        }
-
-        const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
-        
-        // Passando ID como string (aspas simples)
-        const acoes = (currentUser && currentUser.canEdit) 
-            ? `<button class="btn-action btn-edit" onclick="window.abrirModal('${item.id}')"><i class='bx bx-edit-alt'></i></button>
-               <button class="btn-action btn-delete" onclick="window.deletarProduto('${item.id}')"><i class='bx bx-trash'></i></button>`
-            : '<small>🔒</small>';
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><strong>${item.nome}</strong></td>
-            <td class="text-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td>
-            <td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>
-            <td><input type="number" class="input-cell" value="${sale}" onchange="window.atualizarValor('${item.id}', 'sales', this.value)" ${readonly}></td>
-            <td><input type="number" class="input-cell" value="${int}" onchange="window.atualizarValor('${item.id}', 'internal', this.value)" ${readonly}></td>
-            <td><input type="number" class="input-cell" value="${vou}" onchange="window.atualizarValor('${item.id}', 'voucher', this.value)" ${readonly}></td>
-            <td><input type="number" class="input-cell" value="${dam}" onchange="window.atualizarValor('${item.id}', 'damage', this.value)" ${readonly}></td>
-            <td><span class="text-sistema">${sist}</span></td>
-            <td><input type="number" class="input-cell input-real" value="${item.real !== undefined ? item.real : ''}" placeholder="-" onchange="window.atualizarValor('${item.id}', 'real', this.value)" ${readonly}></td>
-            <td>${statusHtml}</td>
-            <td class="text-center">${acoes}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-// --- FUNÇÕES ADMIN E RELATÓRIO (MODAIS) ---
+// --- ADMIN E RELATÓRIO ---
 const modalAdmin = document.getElementById('modalAdmin');
 window.abrirAdmin = function() { modalAdmin.classList.add('active'); renderUsers(); }
 window.fecharAdmin = function() { modalAdmin.classList.remove('active'); }
@@ -295,12 +292,12 @@ window.verDivergencias = function() {
             lista.innerHTML += `<li class="div-item"><span><strong>${i.nome}</strong></span><span class="${classe}">${texto}</span></li>`;
         }
     });
-    if (!temErro) lista.innerHTML = '<li style="padding:10px;color:green">Tudo OK!</li>';
+    if (!temErro) lista.innerHTML = '<li style="padding:10px;color:green;text-align:center;">Tudo Certo!</li>';
     modalRelatorio.classList.add('active');
 }
 window.fecharRelatorio = function() { modalRelatorio.classList.remove('active'); }
 
-// --- LOGICA DE USUÁRIOS (LOCAL STORAGE) ---
+// --- USUÁRIOS ---
 window.adicionarUsuario = function() {
     const u = document.getElementById('new_user').value;
     const p = document.getElementById('new_pass').value;
@@ -316,7 +313,7 @@ function renderUsers() {
     users.forEach((u, idx) => {
         const isMe = u.user === 'Expeto';
         const btnDel = isMe ? '' : `<button onclick="window.delUser(${idx})" style="color:red;border:none;background:none;cursor:pointer">🗑️</button>`;
-        tb.innerHTML += `<tr><td>${u.user}</td><td><input type="checkbox" ${u.canEdit?'checked':''} onchange="window.togglePerm(${idx},'canEdit')" ${isMe?'disabled':''}></td><td><input type="checkbox" ${u.isAdmin?'checked':''} onchange="window.togglePerm(${idx},'isAdmin')" ${isMe?'disabled':''}></td><td>${btnDel}</td></tr>`;
+        tb.innerHTML += `<tr><td>${u.user}</td><td><input type=\"checkbox\" ${u.canEdit?'checked':''} onchange=\"window.togglePerm(${idx},'canEdit')\" ${isMe?'disabled':''}></td><td><input type=\"checkbox\" ${u.isAdmin?'checked':''} onchange=\"window.togglePerm(${idx},'isAdmin')\" ${isMe?'disabled':''}></td><td>${btnDel}</td></tr>`;
     });
 }
 window.togglePerm = function(idx, tipo) {
