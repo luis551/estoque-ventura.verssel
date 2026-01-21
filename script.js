@@ -1,4 +1,4 @@
-// --- IMPORTAÇÕES DO FIREBASE (COM FERRAMENTAS DE BUSCA) ---
+// --- IMPORTAÇÕES DO FIREBASE ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { 
     getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, 
@@ -118,40 +118,55 @@ window.fazerLogin = function() {
 }
 window.fazerLogout = function() { location.reload(); }
 
-// --- 3. ATUALIZAR VALOR (COM TRANSFERÊNCIA DA CASA) ---
+// --- 3. ATUALIZAR VALOR (COM TRANSFERÊNCIA RELATIVA DA CASA) ---
 window.atualizarValor = async function(id, campo, valor) {
     const valFinal = (campo === 'real' && valor === '') ? '' : (parseInt(valor) || 0);
     const docRef = doc(db, currentLoja, id);
     
     try {
-        // LÓGICA DE TRANSFERÊNCIA
-        // Se NÃO for a Casa e for entrada -> Tira da Casa
+        // LÓGICA DE TRANSFERÊNCIA INTELIGENTE
+        // Se NÃO for a Casa e for alteração na ENTRADA
         if (currentLoja !== 'estoque_casa' && campo === 'entry') {
             
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 const dadosAtuais = docSnap.data();
                 const valorAntigo = dadosAtuais.entry || 0;
+                
+                // Calcula a DIFERENÇA (Pode ser positiva ou negativa)
+                // Ex 1: Era 0, virou 50. Diferença = 50 (Sai 50 da Casa)
+                // Ex 2: Era 50, virou 0. Diferença = -50 (Volta 50 pra Casa)
                 const diferenca = valFinal - valorAntigo;
                 const nomeProduto = dadosAtuais.nome;
 
-                // Se aumentou a entrada
-                if (diferenca > 0) {
-                    // Busca na CASA
+                // Se houve qualquer mudança (pra mais ou pra menos)
+                if (diferenca !== 0) {
+                    // Busca na CASA pelo nome exato
                     const q = query(collection(db, "estoque_casa"), where("nome", "==", nomeProduto));
                     const querySnapshot = await getDocs(q);
 
                     if (!querySnapshot.empty) {
                         querySnapshot.forEach(async (docCasa) => {
                             const estoqueAtualCasa = docCasa.data().initial || 0;
+                            // A fórmula mágica: EstoqueCasa - Diferença
+                            // Se dif for 50: Estoque - 50
+                            // Se dif for -50: Estoque - (-50) = Estoque + 50
                             const novoEstoqueCasa = estoqueAtualCasa - diferenca;
                             
                             await updateDoc(doc(db, "estoque_casa", docCasa.id), {
                                 initial: novoEstoqueCasa
                             });
-                            console.log(`🚚 Saiu ${diferenca} ${nomeProduto} da CASA.`);
+                            
+                            // Mensagem Inteligente
+                            if(diferenca > 0) {
+                                alert(`🚚 ABASTECIMENTO:\nSaiu ${diferenca}x ${nomeProduto} do estoque da CASA.`);
+                            } else {
+                                alert(`↩️ DEVOLUÇÃO:\nVoltou ${Math.abs(diferenca)}x ${nomeProduto} para o estoque da CASA.`);
+                            }
                         });
-                        alert(`🚚 Abastecimento!\n${diferenca}x ${nomeProduto} descontados da CASA.`);
+                    } else {
+                        // Opcional: Avisar se não achou na casa (pode comentar se achar chato)
+                        console.log(`Produto ${nomeProduto} não encontrado na Casa para dar baixa.`);
                     }
                 }
             }
@@ -303,7 +318,7 @@ function renderizarInterface() {
     });
 }
 
-// --- 7. SISTEMA DE USUÁRIOS (ADD/EDITAR/EXCLUIR) ---
+// --- 7. SISTEMA DE USUÁRIOS ---
 let editingUserIdx = null;
 
 window.salvarUsuario = function() {
