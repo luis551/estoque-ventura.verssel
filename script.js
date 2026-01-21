@@ -327,39 +327,114 @@ window.verDivergencias = function() {
 }
 window.fecharRelatorio = function() { modalRelatorio.classList.remove('active'); }
 
-// --- SISTEMA DE USUÁRIOS (ATUALIZADO) ---
-window.adicionarUsuario = function() {
+// --- SISTEMA DE USUÁRIOS (COMPLETO: ADD, EDITAR, EXCLUIR) ---
+
+let editingUserIdx = null; // Controla se estamos editando alguém
+
+// 1. FUNÇÃO MESTRA: SALVAR (Cria ou Atualiza)
+window.salvarUsuario = function() {
     const u = document.getElementById('new_user').value;
     const p = document.getElementById('new_pass').value;
-    const access = document.getElementById('new_access').value; // Pega o acesso escolhido
+    const access = document.getElementById('new_access').value;
 
-    if(u && p) {
+    if(!u || !p) return alert("Preencha usuário e senha!");
+
+    // MODO EDIÇÃO (Atualizar existente)
+    if (editingUserIdx !== null) {
+        users[editingUserIdx].user = u;
+        users[editingUserIdx].pass = p;
+        users[editingUserIdx].access = access;
+        alert("✅ Usuário atualizado!");
+        window.cancelarEdicaoUser(); // Sai do modo edição
+    } 
+    // MODO CRIAÇÃO (Novo)
+    else {
         if(users.find(user => user.user === u)) return alert("Usuário já existe!");
-
+        
         users.push({ 
             user: u, 
             pass: p, 
             isAdmin: false, 
             canEdit: false, 
-            access: access // Salva: 'all', 'estoque_ventura' ou 'estoque_contento'
+            access: access 
         });
-        
-        localStorage.setItem('estoquePro_users', JSON.stringify(users));
-        renderUsers();
-        
-        // Limpa campos
+        alert("✅ Usuário criado!");
+    }
+
+    // Salva no navegador e atualiza a tabela
+    localStorage.setItem('estoquePro_users', JSON.stringify(users));
+    renderUsers();
+    
+    // Limpa se não estiver editando
+    if (editingUserIdx === null) {
         document.getElementById('new_user').value = '';
         document.getElementById('new_pass').value = '';
-    } else {
-        alert("Preencha usuário e senha!");
     }
 }
 
+// 2. EDITAR (Carrega os dados no form)
+window.editarUsuario = function(idx) {
+    const user = users[idx];
+    
+    // Joga os dados nos inputs
+    document.getElementById('new_user').value = user.user;
+    document.getElementById('new_pass').value = user.pass;
+    document.getElementById('new_access').value = user.access || 'all';
+
+    // Ajusta o visual para "Modo Edição"
+    editingUserIdx = idx;
+    document.getElementById('tituloFormUser').innerText = `✏️ Editando: ${user.user}`;
+    document.getElementById('tituloFormUser').style.color = "#f39c12";
+    
+    const btnSave = document.getElementById('btnSaveUser');
+    btnSave.innerText = "Salvar";
+    btnSave.style.backgroundColor = "#f39c12"; // Laranja
+    
+    document.getElementById('btnCancelUser').style.display = "block"; // Mostra o X
+}
+
+// 3. CANCELAR EDIÇÃO
+window.cancelarEdicaoUser = function() {
+    editingUserIdx = null;
+    document.getElementById('new_user').value = '';
+    document.getElementById('new_pass').value = '';
+    document.getElementById('new_access').value = 'all';
+
+    // Volta o visual ao normal
+    document.getElementById('tituloFormUser').innerText = "Novo Usuário";
+    document.getElementById('tituloFormUser').style.color = "";
+    
+    const btnSave = document.getElementById('btnSaveUser');
+    btnSave.innerText = "Add";
+    btnSave.style.backgroundColor = ""; // Cor original (azul do CSS)
+    
+    document.getElementById('btnCancelUser').style.display = "none";
+}
+
+// 4. DELETAR
+window.delUser = function(idx) {
+    if(confirm('Tem certeza que quer apagar esse usuário?')) {
+        users.splice(idx, 1);
+        localStorage.setItem('estoquePro_users', JSON.stringify(users));
+        
+        // Se estava editando esse cara, cancela a edição
+        if(editingUserIdx === idx) window.cancelarEdicaoUser();
+        
+        renderUsers();
+    }
+}
+
+// 5. PERMISSÕES (Checkbox)
+window.togglePerm = function(idx, tipo) {
+    users[idx][tipo] = !users[idx][tipo];
+    localStorage.setItem('estoquePro_users', JSON.stringify(users));
+}
+
+// 6. RENDERIZAR TABELA (Com nomes bonitos e botões)
 function renderUsers() {
     const tb = document.querySelector('#tabelaUsers tbody');
     tb.innerHTML = '';
     
-    // Dicionário para mostrar nomes bonitos na tabela
     const nomesAcesso = {
         'all': '<span style="color:blue; font-weight:bold;">🌍 Total</span>',
         'estoque_ventura': '🏠 Ventura',
@@ -367,19 +442,24 @@ function renderUsers() {
     };
 
     users.forEach((u, idx) => {
-        const isMe = u.user === 'Expeto';
-        const btnDel = isMe ? '' : `<button onclick="window.delUser(${idx})" style="color:red;border:none;background:none;cursor:pointer">🗑️</button>`;
+        const isMe = u.user === 'Expeto'; // Protege você
         
-        // Pega o nome bonito ou usa o código se der erro
+        // Botões
+        const btnEdit = `<button onclick="window.editarUsuario(${idx})" title="Editar" style="color:#f39c12;border:none;background:none;cursor:pointer;font-size:1.2rem;margin-right:8px;">✏️</button>`;
+        const btnDel = isMe ? '' : `<button onclick="window.delUser(${idx})" title="Excluir" style="color:red;border:none;background:none;cursor:pointer;font-size:1.2rem;">🗑️</button>`;
+        
         const displayAccess = nomesAcesso[u.access] || 'Total';
 
         tb.innerHTML += `
             <tr style="border-bottom:1px solid #eee;">
                 <td style="padding:10px;"><strong>${u.user}</strong></td>
-                <td style="padding:10px;">${displayAccess}</td>
+                <td style="padding:10px; font-size:0.85rem;">${displayAccess}</td>
                 <td style="text-align:center;"><input type="checkbox" ${u.canEdit?'checked':''} onchange="window.togglePerm(${idx},'canEdit')" ${isMe?'disabled':''}></td>
                 <td style="text-align:center;"><input type="checkbox" ${u.isAdmin?'checked':''} onchange="window.togglePerm(${idx},'isAdmin')" ${isMe?'disabled':''}></td>
-                <td style="text-align:center;">${btnDel}</td>
+                <td style="text-align:center;">
+                    ${btnEdit}
+                    ${btnDel}
+                </td>
             </tr>
         `;
     });

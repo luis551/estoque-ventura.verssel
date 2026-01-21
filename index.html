@@ -153,7 +153,7 @@
     </div>
 
 <div class="modal-overlay" id="modalAdmin">
-    <div class="modal-box" style="width: 500px; max-width: 95%;">
+    <div class="modal-box" style="width: 550px; max-width: 95%;">
         <div class="modal-header">
             <h2>👑 Gestão de Usuários</h2>
             <button class="btn-close" onclick="window.fecharAdmin()"><i class='bx bx-x'></i></button>
@@ -161,7 +161,7 @@
         <div class="modal-body">
             
             <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid #eee;">
-                <h3 style="margin-bottom:10px; font-size:1rem;">Novo Usuário</h3>
+                <h3 id="tituloFormUser" style="margin-bottom:10px; font-size:1rem; font-weight:bold;">Novo Usuário</h3>
                 
                 <div style="display:flex; flex-direction:column; gap:10px;">
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
@@ -175,7 +175,10 @@
                             <option value="estoque_ventura">🏠 Apenas Ventura</option>
                             <option value="estoque_contento">🏢 Apenas Contento</option>
                         </select>
-                        <button class="btn-save" onclick="window.adicionarUsuario()" style="width:100px;">Add</button>
+                        
+                        <button id="btnCancelUser" onclick="window.cancelarEdicaoUser()" style="display:none; background:#95a5a6; color:white; border:none; padding:0 15px; border-radius:6px; cursor:pointer; font-weight:bold;">✖</button>
+                        
+                        <button id="btnSaveUser" class="btn-save" onclick="window.salvarUsuario()" style="width:100px;">Add</button>
                     </div>
                 </div>
             </div>
@@ -184,11 +187,11 @@
                 <table id="tabelaUsers" style="width:100%; border-collapse:collapse; font-size:0.9rem;">
                     <thead>
                         <tr style="background:#eee; text-align:left; color:#555;">
-                            <th style="padding:10px;">Usuário</th>
-                            <th style="padding:10px;">Permissão</th>
+                            <th style="padding:10px;">User</th>
+                            <th style="padding:10px;">Acesso</th>
                             <th style="padding:10px; text-align:center;">Edit?</th>
                             <th style="padding:10px; text-align:center;">Adm?</th>
-                            <th style="padding:10px; text-align:center;">Del</th>
+                            <th style="padding:10px; text-align:center;">Ações</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
