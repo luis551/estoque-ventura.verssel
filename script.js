@@ -206,9 +206,26 @@ window.fecharSemana = async function() {
     }
 }
 
-// --- RENDERIZAÇÃO (AGRUPADA POR CATEGORIA) ---
+// --- RENDERIZAÇÃO (COM AUDITORIA CEGA) ---
 function renderizarInterface() {
-    // 1. Cálculos de Totais (Isso continua igual)
+    // Verifica se é admin
+    const isAdmin = currentUser && currentUser.isAdmin;
+
+    // 1. Controle de Visibilidade dos Cards do Dashboard
+    const cardValor = document.getElementById('cardValor');
+    const cardAlertas = document.getElementById('cardAlertas');
+    
+    if (cardValor && cardAlertas) {
+        if (isAdmin) {
+            cardValor.style.display = 'flex';
+            cardAlertas.style.display = 'flex';
+        } else {
+            cardValor.style.display = 'none';
+            cardAlertas.style.display = 'none';
+        }
+    }
+
+    // 2. Cálculos (O código calcula, mas só mostra se for admin)
     document.getElementById('totalItens').innerText = itens.length;
     
     const valorTotal = itens.reduce((acc, i) => {
@@ -223,41 +240,72 @@ function renderizarInterface() {
     }).length;
     document.getElementById('alertasBaixos').innerText = alertas;
 
-    // 2. Preparar Tabela
+    // 3. Preparar Tabela
     const tbody = document.querySelector('#tabelaProdutos tbody');
+    const thead = document.querySelector('#tabelaProdutos thead tr');
+    
+    // RECONSTRÓI O CABEÇALHO (THEAD) DINAMICAMENTE
+    // Se não for admin, removemos as colunas proibidas do HTML
+    let headerHTML = `
+        <th style="width: 200px;">Produto</th>
+        <th class="th-center" title="Inicial">INI (+)</th>
+        <th class="th-center" title="Entrada">ENT (+)</th>
+    `;
+    
+    // Colunas Proibidas para Funcionários
+    if (isAdmin) {
+        headerHTML += `<th class="th-center" title="Venda">VENDA (-)</th>`;
+        headerHTML += `<th class="th-center" title="Consumo Interno">CONS (-)</th>`;
+    }
+
+    headerHTML += `<th class="th-center" title="Vale Funcionário">VALE (-)</th>`;
+    headerHTML += `<th class="th-center" title="Avaria/Perda">AVARIA (-)</th>`;
+
+    // Coluna SISTEMA (Oculta para funcionários)
+    if (isAdmin) {
+        headerHTML += `<th class="th-center" style="background:#f0f0f0;">SIST</th>`;
+    }
+
+    headerHTML += `<th class="th-center" style="background:#fffbe6; border:2px solid #f1c40f;">REAL</th>`;
+
+    // Coluna STATUS (Oculta para funcionários)
+    if (isAdmin) {
+        headerHTML += `<th class="th-center">Status</th>`;
+    }
+
+    headerHTML += `<th class="th-center">Ações</th>`;
+    thead.innerHTML = headerHTML;
+
+
+    // 4. Desenha as linhas
     tbody.innerHTML = '';
 
     if (itens.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:30px; color:#999;">Nenhum produto nesta loja.<br>Clique em "+ Novo Item".</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:30px; color:#999;">Nenhum produto nesta loja.<br>Clique em "+ Novo Item".</td></tr>';
         return;
     }
 
-    // --- NOVA LÓGICA DE AGRUPAMENTO ---
+    // Agrupamento por Categoria
     const grupos = {};
-    
-    // Separa os itens em grupos
     itens.forEach(item => {
         const cat = (item.categoria || 'GERAL').toUpperCase().trim();
         if (!grupos[cat]) grupos[cat] = [];
         grupos[cat].push(item);
     });
 
-    // Ordena as categorias alfabeticamente (Ex: AGUAS, BEBIDAS, CERVEJAS...)
     const categoriasOrdenadas = Object.keys(grupos).sort();
 
-    // Loop pelas Categorias
     categoriasOrdenadas.forEach(categoria => {
-        
-        // A. Cria a Linha de Título da Categoria
         const trHeader = document.createElement('tr');
+        // Ajusta o colspan dependendo se é admin ou não para a linha cinza não quebrar
+        const colspanTotal = isAdmin ? 11 : 7; 
         trHeader.innerHTML = `
-            <td colspan="11" class="cat-header">
+            <td colspan="${colspanTotal}" class="cat-header">
                 📂 ${categoria} <span style="font-size:0.8em; opacity:0.6; margin-left:10px;">(${grupos[categoria].length} itens)</span>
             </td>
         `;
         tbody.appendChild(trHeader);
 
-        // B. Loop pelos Produtos dessa Categoria (Ordenados por nome)
         const itensDaCategoria = grupos[categoria].sort((a,b) => (a.nome || "").localeCompare(b.nome || ""));
 
         itensDaCategoria.forEach(item => {
@@ -269,6 +317,7 @@ function renderizarInterface() {
             const dam = item.damage || 0;
             const sist = ini + ent - sale - int - vou - dam;
             
+            // Lógica do Status
             let statusHtml = '<span style="color:#ccc">-</span>';
             if (item.real !== '' && item.real !== undefined) {
                 const real = parseInt(item.real);
@@ -280,30 +329,50 @@ function renderizarInterface() {
 
             const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
             
+            // Permissões de Ação
             const acoes = (currentUser && currentUser.canEdit) 
                 ? `<button class="btn-action" title="Editar" onclick="window.abrirModal('${item.id}')">✏️</button>
                    <button class="btn-action" title="Apagar" style="color:#e74c3c;" onclick="window.deletarProduto('${item.id}')">🗑️</button>`
                 : '<small>🔒</small>';
 
+            // CONSTRÓI A LINHA (TR) CONDICIONALMENTE
+            let rowHTML = `<td style="padding-left: 20px;"><strong>${item.nome}</strong></td>`;
+            rowHTML += `<td class="th-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td>`;
+            
+            // Entrada (Todos veem)
+            rowHTML += `<td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>`;
+            
+            // Venda e Consumo (SÓ ADMIN)
+            if (isAdmin) {
+                rowHTML += `<td><input type="number" class="input-cell" value="${sale}" onchange="window.atualizarValor('${item.id}', 'sales', this.value)" ${readonly}></td>`;
+                rowHTML += `<td><input type="number" class="input-cell" value="${int}" onchange="window.atualizarValor('${item.id}', 'internal', this.value)" ${readonly}></td>`;
+            }
+
+            // Vale e Avaria (Todos veem)
+            rowHTML += `<td><input type="number" class="input-cell" value="${vou}" onchange="window.atualizarValor('${item.id}', 'voucher', this.value)" ${readonly}></td>`;
+            rowHTML += `<td><input type="number" class="input-cell" value="${dam}" onchange="window.atualizarValor('${item.id}', 'damage', this.value)" ${readonly}></td>`;
+            
+            // Sistema (SÓ ADMIN - O segredo!)
+            if (isAdmin) {
+                rowHTML += `<td><span class="text-sistema">${sist}</span></td>`;
+            }
+
+            // Real (Todos veem para preencher)
+            rowHTML += `<td><input type="number" class="input-cell input-real" value="${item.real !== undefined ? item.real : ''}" placeholder="-" onchange="window.atualizarValor('${item.id}', 'real', this.value)" ${readonly}></td>`;
+            
+            // Status (SÓ ADMIN - Para não dar dica)
+            if (isAdmin) {
+                rowHTML += `<td>${statusHtml}</td>`;
+            }
+
+            rowHTML += `<td class="th-center">${acoes}</td>`;
+
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td style="padding-left: 20px;"><strong>${item.nome}</strong></td>
-                <td class="th-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td>
-                <td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>
-                <td><input type="number" class="input-cell" value="${sale}" onchange="window.atualizarValor('${item.id}', 'sales', this.value)" ${readonly}></td>
-                <td><input type="number" class="input-cell" value="${int}" onchange="window.atualizarValor('${item.id}', 'internal', this.value)" ${readonly}></td>
-                <td><input type="number" class="input-cell" value="${vou}" onchange="window.atualizarValor('${item.id}', 'voucher', this.value)" ${readonly}></td>
-                <td><input type="number" class="input-cell" value="${dam}" onchange="window.atualizarValor('${item.id}', 'damage', this.value)" ${readonly}></td>
-                <td><span class="text-sistema">${sist}</span></td>
-                <td><input type="number" class="input-cell input-real" value="${item.real !== undefined ? item.real : ''}" placeholder="-" onchange="window.atualizarValor('${item.id}', 'real', this.value)" ${readonly}></td>
-                <td>${statusHtml}</td>
-                <td class="th-center">${acoes}</td>
-            `;
+            tr.innerHTML = rowHTML;
             tbody.appendChild(tr);
         });
     });
 }
-
 // --- FUNÇÕES DE MODAL ---
 const modal = document.getElementById('modalProduto');
 window.abrirModal = function(editId = null) {
