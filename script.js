@@ -206,9 +206,9 @@ window.fecharSemana = async function() {
     }
 }
 
-// --- RENDERIZAÇÃO ---
+// --- RENDERIZAÇÃO (AGRUPADA POR CATEGORIA) ---
 function renderizarInterface() {
-    // Totais
+    // 1. Cálculos de Totais (Isso continua igual)
     document.getElementById('totalItens').innerText = itens.length;
     
     const valorTotal = itens.reduce((acc, i) => {
@@ -223,7 +223,7 @@ function renderizarInterface() {
     }).length;
     document.getElementById('alertasBaixos').innerText = alertas;
 
-    // Tabela
+    // 2. Preparar Tabela
     const tbody = document.querySelector('#tabelaProdutos tbody');
     tbody.innerHTML = '';
 
@@ -232,46 +232,75 @@ function renderizarInterface() {
         return;
     }
 
+    // --- NOVA LÓGICA DE AGRUPAMENTO ---
+    const grupos = {};
+    
+    // Separa os itens em grupos
     itens.forEach(item => {
-        const ini = item.initial || 0;
-        const ent = item.entry || 0;
-        const sale = item.sales || 0;
-        const int = item.internal || 0;
-        const vou = item.voucher || 0;
-        const dam = item.damage || 0;
-        const sist = ini + ent - sale - int - vou - dam;
-        
-        let statusHtml = '<span style="color:#ccc">-</span>';
-        if (item.real !== '' && item.real !== undefined) {
-            const real = parseInt(item.real);
-            const diff = real - sist;
-            if (diff === 0) statusHtml = '<span class="status-ok">✅ OK</span>';
-            else if (diff > 0) statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
-            else statusHtml = `<span class="status-falta">❌ -${Math.abs(diff)}</span>`;
-        }
+        const cat = (item.categoria || 'GERAL').toUpperCase().trim();
+        if (!grupos[cat]) grupos[cat] = [];
+        grupos[cat].push(item);
+    });
 
-        const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
-        
-        const acoes = (currentUser && currentUser.canEdit) 
-            ? `<button class="btn-action" title="Editar" onclick="window.abrirModal('${item.id}')">✏️</button>
-               <button class="btn-action" title="Apagar" style="color:#e74c3c;" onclick="window.deletarProduto('${item.id}')">🗑️</button>`
-            : '<small>🔒</small>';
+    // Ordena as categorias alfabeticamente (Ex: AGUAS, BEBIDAS, CERVEJAS...)
+    const categoriasOrdenadas = Object.keys(grupos).sort();
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><strong>${item.nome}</strong></td>
-            <td class="th-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td>
-            <td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>
-            <td><input type="number" class="input-cell" value="${sale}" onchange="window.atualizarValor('${item.id}', 'sales', this.value)" ${readonly}></td>
-            <td><input type="number" class="input-cell" value="${int}" onchange="window.atualizarValor('${item.id}', 'internal', this.value)" ${readonly}></td>
-            <td><input type="number" class="input-cell" value="${vou}" onchange="window.atualizarValor('${item.id}', 'voucher', this.value)" ${readonly}></td>
-            <td><input type="number" class="input-cell" value="${dam}" onchange="window.atualizarValor('${item.id}', 'damage', this.value)" ${readonly}></td>
-            <td><span class="text-sistema">${sist}</span></td>
-            <td><input type="number" class="input-cell input-real" value="${item.real !== undefined ? item.real : ''}" placeholder="-" onchange="window.atualizarValor('${item.id}', 'real', this.value)" ${readonly}></td>
-            <td>${statusHtml}</td>
-            <td class="th-center">${acoes}</td>
+    // Loop pelas Categorias
+    categoriasOrdenadas.forEach(categoria => {
+        
+        // A. Cria a Linha de Título da Categoria
+        const trHeader = document.createElement('tr');
+        trHeader.innerHTML = `
+            <td colspan="11" class="cat-header">
+                📂 ${categoria} <span style="font-size:0.8em; opacity:0.6; margin-left:10px;">(${grupos[categoria].length} itens)</span>
+            </td>
         `;
-        tbody.appendChild(tr);
+        tbody.appendChild(trHeader);
+
+        // B. Loop pelos Produtos dessa Categoria (Ordenados por nome)
+        const itensDaCategoria = grupos[categoria].sort((a,b) => (a.nome || "").localeCompare(b.nome || ""));
+
+        itensDaCategoria.forEach(item => {
+            const ini = item.initial || 0;
+            const ent = item.entry || 0;
+            const sale = item.sales || 0;
+            const int = item.internal || 0;
+            const vou = item.voucher || 0;
+            const dam = item.damage || 0;
+            const sist = ini + ent - sale - int - vou - dam;
+            
+            let statusHtml = '<span style="color:#ccc">-</span>';
+            if (item.real !== '' && item.real !== undefined) {
+                const real = parseInt(item.real);
+                const diff = real - sist;
+                if (diff === 0) statusHtml = '<span class="status-ok">✅ OK</span>';
+                else if (diff > 0) statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
+                else statusHtml = `<span class="status-falta">❌ -${Math.abs(diff)}</span>`;
+            }
+
+            const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
+            
+            const acoes = (currentUser && currentUser.canEdit) 
+                ? `<button class="btn-action" title="Editar" onclick="window.abrirModal('${item.id}')">✏️</button>
+                   <button class="btn-action" title="Apagar" style="color:#e74c3c;" onclick="window.deletarProduto('${item.id}')">🗑️</button>`
+                : '<small>🔒</small>';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding-left: 20px;"><strong>${item.nome}</strong></td>
+                <td class="th-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td>
+                <td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>
+                <td><input type="number" class="input-cell" value="${sale}" onchange="window.atualizarValor('${item.id}', 'sales', this.value)" ${readonly}></td>
+                <td><input type="number" class="input-cell" value="${int}" onchange="window.atualizarValor('${item.id}', 'internal', this.value)" ${readonly}></td>
+                <td><input type="number" class="input-cell" value="${vou}" onchange="window.atualizarValor('${item.id}', 'voucher', this.value)" ${readonly}></td>
+                <td><input type="number" class="input-cell" value="${dam}" onchange="window.atualizarValor('${item.id}', 'damage', this.value)" ${readonly}></td>
+                <td><span class="text-sistema">${sist}</span></td>
+                <td><input type="number" class="input-cell input-real" value="${item.real !== undefined ? item.real : ''}" placeholder="-" onchange="window.atualizarValor('${item.id}', 'real', this.value)" ${readonly}></td>
+                <td>${statusHtml}</td>
+                <td class="th-center">${acoes}</td>
+            `;
+            tbody.appendChild(tr);
+        });
     });
 }
 

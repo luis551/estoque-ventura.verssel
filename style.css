@@ -211,3 +211,16 @@ table td { padding: 8px 5px; vertical-align: middle; }
 /* EMPURRAR O CONTEÚDO PRA DIREITA QUANDO LOGAR */
 body.logado .container { margin-left: 250px; width: calc(100% - 250px); }
 body.logado .header { width: 100%; }
+
+/* --- CABEÇALHO DE CATEGORIA NA TABELA --- */
+.cat-header {
+    background-color: #dfe6e9; /* Cinza azulado claro */
+    color: #2d3436;
+    font-weight: 800; /* Bem negrito */
+    text-transform: uppercase;
+    font-size: 0.95rem;
+    padding: 12px 15px;
+    letter-spacing: 1px;
+    border-top: 2px solid #b2bec3;
+    border-bottom: 1px solid #b2bec3;
+}
