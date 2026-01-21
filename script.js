@@ -1,6 +1,9 @@
-// --- IMPORTAÇÕES DO FIREBASE ---
+// --- IMPORTAÇÕES DO FIREBASE (COM FERRAMENTAS DE BUSCA) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { 
+    getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, 
+    onSnapshot, writeBatch, getDoc, query, where, getDocs 
+} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 // --- SUAS CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -19,36 +22,39 @@ const db = getFirestore(app);
 // --- ESTADO GLOBAL ---
 let itens = [];
 let currentUser = null;
-let currentLoja = 'estoque_ventura'; // Começa na Ventura
-let unsubscribe = null; // Para parar de ouvir a loja antiga
+let currentLoja = 'estoque_ventura'; 
+let unsubscribe = null; 
 
 // Usuários (Local Storage)
-// Usuários (Adicionei o campo 'access' no padrão)
 let users = JSON.parse(localStorage.getItem('estoquePro_users')) || [
     { user: 'Expeto', pass: '1511', isAdmin: true, canEdit: true, access: 'all' }
 ];
 
-// --- FUNÇÃO PARA TROCAR DE LOJA (COM SEGURANÇA) ---
+// --- 1. FUNÇÃO PARA TROCAR DE LOJA ---
 window.trocarLoja = function(novaLoja) {
-    // 1. SEGURANÇA: Se não for 'all' e tentar acessar outra loja, bloqueia
     if (currentUser && currentUser.access !== 'all' && currentUser.access !== novaLoja) {
-        return alert("⛔ ACESSO NEGADO: Você não tem permissão para esta loja.");
+        return alert("⛔ ACESSO NEGADO: Você não tem permissão para esta área.");
     }
 
     currentLoja = novaLoja;
     
-    // 2. Atualiza Botões Visuais
+    // Atualiza Botões Visuais
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     
-    // Só marca como ativo se o botão estiver visível
     const btnV = document.getElementById('btn-ventura');
     const btnC = document.getElementById('btn-contento');
+    const btnCasa = document.getElementById('btn-casa');
     
-    if(novaLoja.includes('ventura') && btnV) btnV.classList.add('active');
-    if(novaLoja.includes('contento') && btnC) btnC.classList.add('active');
+    if(novaLoja === 'estoque_casa' && btnCasa) btnCasa.classList.add('active');
+    if(novaLoja === 'estoque_ventura' && btnV) btnV.classList.add('active');
+    if(novaLoja === 'estoque_contento' && btnC) btnC.classList.add('active');
 
-    // 3. Atualiza Títulos
-    const titulos = { 'estoque_ventura': 'LOJA VENTURA', 'estoque_contento': 'LOJA CONTENTO' };
+    // Atualiza Títulos
+    const titulos = { 
+        'estoque_casa': '📦 ESTOQUE CASA (CENTRAL)',
+        'estoque_ventura': '🏠 LOJA VENTURA', 
+        'estoque_contento': '🏢 LOJA CONTENTO' 
+    };
     const nomeLoja = titulos[novaLoja] || 'ESTOQUE';
     
     const tituloEl = document.getElementById('tituloLoja');
@@ -57,7 +63,7 @@ window.trocarLoja = function(novaLoja) {
     const subTituloEl = document.getElementById('subtituloLoja');
     if(subTituloEl) subTituloEl.innerHTML = `Produtos (${nomeLoja})`;
 
-    // 4. Carrega os dados do banco
+    // Carrega dados
     if(unsubscribe) unsubscribe();
     const novaRef = collection(db, currentLoja);
     unsubscribe = onSnapshot(novaRef, (snapshot) => {
@@ -67,7 +73,7 @@ window.trocarLoja = function(novaLoja) {
     });
 }
 
-// --- LOGIN (FILTRO DE ACESSO) ---
+// --- 2. LOGIN (COM PERMISSÕES) ---
 window.fazerLogin = function() {
     const u = document.getElementById('loginUser').value;
     const p = document.getElementById('loginPass').value;
@@ -75,49 +81,89 @@ window.fazerLogin = function() {
 
     if (found) {
         currentUser = found;
-        
-        // Garante compatibilidade com usuários antigos (se não tiver access, vira 'all')
         if(!currentUser.access) currentUser.access = 'all';
 
-        // Mostra a tela
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-content').style.display = 'block';
         document.getElementById('sidebarLoja').style.display = 'flex';
         document.body.classList.add('logado');
 
-        // Botão Admin só aparece se for Admin
         const btnAdm = document.getElementById('btnAdminSide');
         if(btnAdm) btnAdm.style.display = found.isAdmin ? 'flex' : 'none';
         
-        // --- FILTRO DE BOTÕES DA BARRA LATERAL ---
-        const btnVentura = document.getElementById('btn-ventura');
-        const btnContento = document.getElementById('btn-contento');
+        // Filtro de Botões da Sidebar
+        const btnV = document.getElementById('btn-ventura');
+        const btnC = document.getElementById('btn-contento');
+        const btnCasa = document.getElementById('btn-casa');
 
-        // Reseta (mostra todos)
-        btnVentura.style.display = 'flex';
-        btnContento.style.display = 'flex';
+        // Reset
+        if(btnV) btnV.style.display = 'flex'; 
+        if(btnC) btnC.style.display = 'flex'; 
+        if(btnCasa) btnCasa.style.display = 'flex';
 
-        // Aplica a regra
-        if (currentUser.access === 'estoque_ventura') {
-            btnContento.style.display = 'none'; // Esconde Contento
-            window.trocarLoja('estoque_ventura'); // Entra na Ventura
-        } 
-        else if (currentUser.access === 'estoque_contento') {
-            btnVentura.style.display = 'none'; // Esconde Ventura
-            window.trocarLoja('estoque_contento'); // Entra na Contento
-        } 
-        else {
-            // Se for 'all', mostra tudo e entra na padrão
+        // Lógica de Redirecionamento
+        if (currentUser.access === 'all') {
             window.trocarLoja('estoque_ventura');
+        } else {
+            // Esconde os outros
+            if(currentUser.access !== 'estoque_ventura' && btnV) btnV.style.display = 'none';
+            if(currentUser.access !== 'estoque_contento' && btnC) btnC.style.display = 'none';
+            if(currentUser.access !== 'estoque_casa' && btnCasa) btnCasa.style.display = 'none';
+            
+            window.trocarLoja(currentUser.access);
         }
-
     } else {
         document.getElementById('loginMsg').innerText = "Senha incorreta!";
     }
 }
 window.fazerLogout = function() { location.reload(); }
 
-// --- 3. SALVAR (CRIAR OU EDITAR) CORRIGIDO ---
+// --- 3. ATUALIZAR VALOR (COM TRANSFERÊNCIA DA CASA) ---
+window.atualizarValor = async function(id, campo, valor) {
+    const valFinal = (campo === 'real' && valor === '') ? '' : (parseInt(valor) || 0);
+    const docRef = doc(db, currentLoja, id);
+    
+    try {
+        // LÓGICA DE TRANSFERÊNCIA
+        // Se NÃO for a Casa e for entrada -> Tira da Casa
+        if (currentLoja !== 'estoque_casa' && campo === 'entry') {
+            
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const dadosAtuais = docSnap.data();
+                const valorAntigo = dadosAtuais.entry || 0;
+                const diferenca = valFinal - valorAntigo;
+                const nomeProduto = dadosAtuais.nome;
+
+                // Se aumentou a entrada
+                if (diferenca > 0) {
+                    // Busca na CASA
+                    const q = query(collection(db, "estoque_casa"), where("nome", "==", nomeProduto));
+                    const querySnapshot = await getDocs(q);
+
+                    if (!querySnapshot.empty) {
+                        querySnapshot.forEach(async (docCasa) => {
+                            const estoqueAtualCasa = docCasa.data().initial || 0;
+                            const novoEstoqueCasa = estoqueAtualCasa - diferenca;
+                            
+                            await updateDoc(doc(db, "estoque_casa", docCasa.id), {
+                                initial: novoEstoqueCasa
+                            });
+                            console.log(`🚚 Saiu ${diferenca} ${nomeProduto} da CASA.`);
+                        });
+                        alert(`🚚 Abastecimento!\n${diferenca}x ${nomeProduto} descontados da CASA.`);
+                    }
+                }
+            }
+        }
+
+        // Atualiza a loja atual
+        await updateDoc(docRef, { [campo]: valFinal });
+
+    } catch(e) { console.error(e); }
+}
+
+// --- 4. SALVAR/CRIAR ---
 window.salvarProduto = async function() {
     const id = document.getElementById('m_id').value;
     const nome = document.getElementById('m_nome').value.toUpperCase();
@@ -130,160 +176,86 @@ window.salvarProduto = async function() {
 
     try {
         if (id) {
-            // EDITAR: Usa currentLoja
-            const docRef = doc(db, currentLoja, id);
-            await updateDoc(docRef, { nome, categoria: cat, min, preco });
+            await updateDoc(doc(db, currentLoja, id), { nome, categoria: cat, min, preco });
         } else {
-            // CRIAR: Usa currentLoja
             await addDoc(collection(db, currentLoja), {
                 nome, categoria: cat, initial: qtdIni, min, preco,
                 entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: ''
             });
         }
         window.fecharModal();
-    } catch (e) {
-        console.error(e);
-        alert("Erro ao salvar: " + e.message);
-    }
+    } catch (e) { alert("Erro ao salvar: " + e.message); }
 }
 
-// --- 4. DELETAR CORRIGIDO ---
+// --- 5. DELETAR E FECHAR SEMANA ---
 window.deletarProduto = async function(id) {
     if(!currentUser || !currentUser.canEdit) return alert("Sem permissão!");
-    
     if (confirm("Apagar produto desta loja?")) {
-        try {
-            // Deleta da coleção atual
-            await deleteDoc(doc(db, currentLoja, id));
-        } catch (e) {
-            alert("Erro ao apagar: " + e.message);
-        }
+        try { await deleteDoc(doc(db, currentLoja, id)); } catch (e) { alert("Erro: " + e.message); }
     }
 }
 
-// --- 5. ATUALIZAR VALOR (PLANILHA) CORRIGIDO ---
-window.atualizarValor = async function(id, campo, valor) {
-    const valFinal = (campo === 'real' && valor === '') ? '' : (parseInt(valor) || 0);
-    const docRef = doc(db, currentLoja, id);
-    
-    try {
-        await updateDoc(docRef, { [campo]: valFinal });
-    } catch(e) { console.error(e); }
-}
-
-// --- 6. FECHAR SEMANA CORRIGIDO ---
 window.fecharSemana = async function() {
     if(!currentUser || !currentUser.isAdmin) return alert("Apenas Admin!");
     
-    const nomeLoja = currentLoja === 'estoque_ventura' ? 'VENTURA' : 'CONTENTO';
-    if(!confirm(`⚠️ FECHAR CAIXA DA LOJA ${nomeLoja}?\n\nO estoque REAL vira o INICIAL.\nEntradas/Saídas zeram.\n\nConfirma?`)) return;
+    let nomeLoja = 'DESCONHECIDA';
+    if(currentLoja === 'estoque_ventura') nomeLoja = 'VENTURA';
+    if(currentLoja === 'estoque_contento') nomeLoja = 'CONTENTO';
+    if(currentLoja === 'estoque_casa') nomeLoja = 'CASA (CENTRAL)';
+
+    if(!confirm(`⚠️ FECHAR CAIXA DA ${nomeLoja}?\n\nO estoque REAL vira o INICIAL.\nEntradas/Saídas zeram.\nConfirma?`)) return;
 
     try {
         const batch = writeBatch(db);
-
         itens.forEach(i => {
             const docRef = doc(db, currentLoja, i.id);
-            const ini = i.initial || 0;
-            const ent = i.entry || 0;
-            const sale = i.sales || 0;
-            const int = i.internal || 0;
-            const vou = i.voucher || 0;
-            const dam = i.damage || 0;
+            const ini=i.initial||0; const ent=i.entry||0; const sale=i.sales||0;
+            const int=i.internal||0; const vou=i.voucher||0; const dam=i.damage||0;
             
             let novoInicial = ini + ent - sale - int - vou - dam;
             if (i.real !== '' && i.real !== undefined) novoInicial = parseInt(i.real);
 
-            batch.update(docRef, {
-                initial: novoInicial,
-                entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: ''
-            });
+            batch.update(docRef, { initial: novoInicial, entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: '' });
         });
-
         await batch.commit();
         alert(`✅ Semana da ${nomeLoja} fechada!`);
-    } catch(e) {
-        alert("Erro: " + e.message);
-    }
+    } catch(e) { alert("Erro: " + e.message); }
 }
 
-// --- RENDERIZAÇÃO (COM AUDITORIA CEGA) ---
+// --- 6. RENDERIZAÇÃO (AUDITORIA CEGA + CATEGORIAS) ---
 function renderizarInterface() {
-    // Verifica se é admin
     const isAdmin = currentUser && currentUser.isAdmin;
 
-    // 1. Controle de Visibilidade dos Cards do Dashboard
+    // Visibilidade dos Cards
     const cardValor = document.getElementById('cardValor');
     const cardAlertas = document.getElementById('cardAlertas');
-    
     if (cardValor && cardAlertas) {
-        if (isAdmin) {
-            cardValor.style.display = 'flex';
-            cardAlertas.style.display = 'flex';
-        } else {
-            cardValor.style.display = 'none';
-            cardAlertas.style.display = 'none';
-        }
+        if (isAdmin) { cardValor.style.display = 'flex'; cardAlertas.style.display = 'flex'; } 
+        else { cardValor.style.display = 'none'; cardAlertas.style.display = 'none'; }
     }
 
-    // 2. Cálculos (O código calcula, mas só mostra se for admin)
+    // Totais
     document.getElementById('totalItens').innerText = itens.length;
-    
-    const valorTotal = itens.reduce((acc, i) => {
-        const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
-        return acc + (sist * i.preco);
-    }, 0);
+    const valorTotal = itens.reduce((acc, i) => acc + (((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)) * i.preco), 0);
     document.getElementById('valorTotal').innerText = valorTotal.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    document.getElementById('alertasBaixos').innerText = itens.filter(i => ((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)) <= i.min).length;
 
-    const alertas = itens.filter(i => {
-        const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
-        return sist <= i.min;
-    }).length;
-    document.getElementById('alertasBaixos').innerText = alertas;
-
-    // 3. Preparar Tabela
+    // Tabela
     const tbody = document.querySelector('#tabelaProdutos tbody');
     const thead = document.querySelector('#tabelaProdutos thead tr');
     
-    // RECONSTRÓI O CABEÇALHO (THEAD) DINAMICAMENTE
-    // Se não for admin, removemos as colunas proibidas do HTML
-    let headerHTML = `
-        <th style="width: 200px;">Produto</th>
-        <th class="th-center" title="Inicial">INI (+)</th>
-        <th class="th-center" title="Entrada">ENT (+)</th>
-    `;
-    
-    // Colunas Proibidas para Funcionários
-    if (isAdmin) {
-        headerHTML += `<th class="th-center" title="Venda">VENDA (-)</th>`;
-        headerHTML += `<th class="th-center" title="Consumo Interno">CONS (-)</th>`;
-    }
-
-    headerHTML += `<th class="th-center" title="Vale Funcionário">VALE (-)</th>`;
-    headerHTML += `<th class="th-center" title="Avaria/Perda">AVARIA (-)</th>`;
-
-    // Coluna SISTEMA (Oculta para funcionários)
-    if (isAdmin) {
-        headerHTML += `<th class="th-center" style="background:#f0f0f0;">SIST</th>`;
-    }
-
+    // Cabeçalho Dinâmico (Auditoria Cega)
+    let headerHTML = `<th style="width: 200px;">Produto</th><th class="th-center">INI (+)</th><th class="th-center">ENT (+)</th>`;
+    if (isAdmin) { headerHTML += `<th class="th-center">VENDA (-)</th><th class="th-center">CONS (-)</th>`; }
+    headerHTML += `<th class="th-center">VALE (-)</th><th class="th-center">AVARIA (-)</th>`;
+    if (isAdmin) { headerHTML += `<th class="th-center" style="background:#f0f0f0;">SIST</th>`; }
     headerHTML += `<th class="th-center" style="background:#fffbe6; border:2px solid #f1c40f;">REAL</th>`;
-
-    // Coluna STATUS (Oculta para funcionários)
-    if (isAdmin) {
-        headerHTML += `<th class="th-center">Status</th>`;
-    }
-
+    if (isAdmin) { headerHTML += `<th class="th-center">Status</th>`; }
     headerHTML += `<th class="th-center">Ações</th>`;
     thead.innerHTML = headerHTML;
 
-
-    // 4. Desenha as linhas
     tbody.innerHTML = '';
-
-    if (itens.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:30px; color:#999;">Nenhum produto nesta loja.<br>Clique em "+ Novo Item".</td></tr>';
-        return;
-    }
+    if (itens.length === 0) { tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:30px; color:#999;">Nada aqui.</td></tr>'; return; }
 
     // Agrupamento por Categoria
     const grupos = {};
@@ -293,272 +265,175 @@ function renderizarInterface() {
         grupos[cat].push(item);
     });
 
-    const categoriasOrdenadas = Object.keys(grupos).sort();
-
-    categoriasOrdenadas.forEach(categoria => {
-        const trHeader = document.createElement('tr');
-        // Ajusta o colspan dependendo se é admin ou não para a linha cinza não quebrar
+    Object.keys(grupos).sort().forEach(categoria => {
         const colspanTotal = isAdmin ? 11 : 7; 
-        trHeader.innerHTML = `
-            <td colspan="${colspanTotal}" class="cat-header">
-                📂 ${categoria} <span style="font-size:0.8em; opacity:0.6; margin-left:10px;">(${grupos[categoria].length} itens)</span>
-            </td>
-        `;
-        tbody.appendChild(trHeader);
+        tbody.innerHTML += `<tr><td colspan="${colspanTotal}" class="cat-header">📂 ${categoria} <span style="font-size:0.8em; opacity:0.6;">(${grupos[categoria].length})</span></td></tr>`;
 
-        const itensDaCategoria = grupos[categoria].sort((a,b) => (a.nome || "").localeCompare(b.nome || ""));
-
-        itensDaCategoria.forEach(item => {
-            const ini = item.initial || 0;
-            const ent = item.entry || 0;
-            const sale = item.sales || 0;
-            const int = item.internal || 0;
-            const vou = item.voucher || 0;
-            const dam = item.damage || 0;
+        grupos[categoria].sort((a,b) => (a.nome||"").localeCompare(b.nome||"")).forEach(item => {
+            const ini=item.initial||0; const ent=item.entry||0; const sale=item.sales||0;
+            const int=item.internal||0; const vou=item.voucher||0; const dam=item.damage||0;
             const sist = ini + ent - sale - int - vou - dam;
             
-            // Lógica do Status
             let statusHtml = '<span style="color:#ccc">-</span>';
             if (item.real !== '' && item.real !== undefined) {
-                const real = parseInt(item.real);
-                const diff = real - sist;
+                const diff = parseInt(item.real) - sist;
                 if (diff === 0) statusHtml = '<span class="status-ok">✅ OK</span>';
                 else if (diff > 0) statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
                 else statusHtml = `<span class="status-falta">❌ -${Math.abs(diff)}</span>`;
             }
 
             const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
-            
-            // Permissões de Ação
             const acoes = (currentUser && currentUser.canEdit) 
-                ? `<button class="btn-action" title="Editar" onclick="window.abrirModal('${item.id}')">✏️</button>
-                   <button class="btn-action" title="Apagar" style="color:#e74c3c;" onclick="window.deletarProduto('${item.id}')">🗑️</button>`
-                : '<small>🔒</small>';
+                ? `<button class="btn-action" onclick="window.abrirModal('${item.id}')">✏️</button><button class="btn-action" style="color:red;" onclick="window.deletarProduto('${item.id}')">🗑️</button>` : '🔒';
 
-            // CONSTRÓI A LINHA (TR) CONDICIONALMENTE
-            let rowHTML = `<td style="padding-left: 20px;"><strong>${item.nome}</strong></td>`;
-            rowHTML += `<td class="th-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td>`;
-            
-            // Entrada (Todos veem)
-            rowHTML += `<td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>`;
-            
-            // Venda e Consumo (SÓ ADMIN)
-            if (isAdmin) {
-                rowHTML += `<td><input type="number" class="input-cell" value="${sale}" onchange="window.atualizarValor('${item.id}', 'sales', this.value)" ${readonly}></td>`;
-                rowHTML += `<td><input type="number" class="input-cell" value="${int}" onchange="window.atualizarValor('${item.id}', 'internal', this.value)" ${readonly}></td>`;
-            }
+            let row = `<td style="padding-left:20px;"><strong>${item.nome}</strong></td>
+                       <td class="th-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td>
+                       <td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>`;
+            if (isAdmin) row += `<td><input type="number" class="input-cell" value="${sale}" onchange="window.atualizarValor('${item.id}', 'sales', this.value)" ${readonly}></td>
+                                 <td><input type="number" class="input-cell" value="${int}" onchange="window.atualizarValor('${item.id}', 'internal', this.value)" ${readonly}></td>`;
+            row += `<td><input type="number" class="input-cell" value="${vou}" onchange="window.atualizarValor('${item.id}', 'voucher', this.value)" ${readonly}></td>
+                    <td><input type="number" class="input-cell" value="${dam}" onchange="window.atualizarValor('${item.id}', 'damage', this.value)" ${readonly}></td>`;
+            if (isAdmin) row += `<td><span class="text-sistema">${sist}</span></td>`;
+            row += `<td><input type="number" class="input-cell input-real" value="${item.real !== undefined ? item.real : ''}" placeholder="-" onchange="window.atualizarValor('${item.id}', 'real', this.value)" ${readonly}></td>`;
+            if (isAdmin) row += `<td>${statusHtml}</td>`;
+            row += `<td class="th-center">${acoes}</td>`;
 
-            // Vale e Avaria (Todos veem)
-            rowHTML += `<td><input type="number" class="input-cell" value="${vou}" onchange="window.atualizarValor('${item.id}', 'voucher', this.value)" ${readonly}></td>`;
-            rowHTML += `<td><input type="number" class="input-cell" value="${dam}" onchange="window.atualizarValor('${item.id}', 'damage', this.value)" ${readonly}></td>`;
-            
-            // Sistema (SÓ ADMIN - O segredo!)
-            if (isAdmin) {
-                rowHTML += `<td><span class="text-sistema">${sist}</span></td>`;
-            }
-
-            // Real (Todos veem para preencher)
-            rowHTML += `<td><input type="number" class="input-cell input-real" value="${item.real !== undefined ? item.real : ''}" placeholder="-" onchange="window.atualizarValor('${item.id}', 'real', this.value)" ${readonly}></td>`;
-            
-            // Status (SÓ ADMIN - Para não dar dica)
-            if (isAdmin) {
-                rowHTML += `<td>${statusHtml}</td>`;
-            }
-
-            rowHTML += `<td class="th-center">${acoes}</td>`;
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = rowHTML;
-            tbody.appendChild(tr);
+            const tr = document.createElement('tr'); tr.innerHTML = row; tbody.appendChild(tr);
         });
     });
 }
-// --- FUNÇÕES DE MODAL ---
-const modal = document.getElementById('modalProduto');
-window.abrirModal = function(editId = null) {
-    if(!currentUser || !currentUser.canEdit) return alert("Sem permissão!");
-    modal.classList.add('active');
-    document.getElementById('m_id').value = '';
-    document.getElementById('modalTitle').innerText = 'Novo Produto';
-    limparCampos();
 
-    if (editId) {
-        const item = itens.find(i => i.id === editId);
-        if (item) {
-            document.getElementById('m_id').value = item.id;
-            document.getElementById('m_nome').value = item.nome;
-            document.getElementById('m_categoria').value = item.categoria;
-            document.getElementById('m_qtd').value = item.initial || 0;
-            document.getElementById('m_min').value = item.min;
-            document.getElementById('m_preco').value = item.preco;
-            document.getElementById('modalTitle').innerText = 'Editar Produto';
-        }
-    }
-}
-window.fecharModal = function() { modal.classList.remove('active'); limparCampos(); }
-function limparCampos() { document.querySelectorAll('#modalProduto input').forEach(i => i.value = ''); }
+// --- 7. SISTEMA DE USUÁRIOS (ADD/EDITAR/EXCLUIR) ---
+let editingUserIdx = null;
 
-// --- ADMIN E RELATÓRIO ---
-const modalAdmin = document.getElementById('modalAdmin');
-window.abrirAdmin = function() { modalAdmin.classList.add('active'); renderUsers(); }
-window.fecharAdmin = function() { modalAdmin.classList.remove('active'); }
-
-const modalRelatorio = document.getElementById('modalRelatorio');
-window.verDivergencias = function() {
-    const lista = document.getElementById('listaDivergencias');
-    lista.innerHTML = '';
-    let temErro = false;
-    itens.forEach(i => {
-        if (i.real === '' || i.real === undefined) return;
-        const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
-        const real = parseInt(i.real);
-        const diff = real - sist;
-        if (diff !== 0) {
-            temErro = true;
-            const classe = diff > 0 ? 'div-sobra' : 'div-falta';
-            const texto = diff > 0 ? `SOBRA DE ${diff}` : `FALTA DE ${Math.abs(diff)}`;
-            lista.innerHTML += `<li class="div-item"><span><strong>${i.nome}</strong></span><span class="${classe}">${texto}</span></li>`;
-        }
-    });
-    if (!temErro) lista.innerHTML = '<li style="padding:10px;color:green;text-align:center;">Tudo Certo!</li>';
-    modalRelatorio.classList.add('active');
-}
-window.fecharRelatorio = function() { modalRelatorio.classList.remove('active'); }
-
-// --- SISTEMA DE USUÁRIOS (COMPLETO: ADD, EDITAR, EXCLUIR) ---
-
-let editingUserIdx = null; // Controla se estamos editando alguém
-
-// 1. FUNÇÃO MESTRA: SALVAR (Cria ou Atualiza)
 window.salvarUsuario = function() {
     const u = document.getElementById('new_user').value;
     const p = document.getElementById('new_pass').value;
     const access = document.getElementById('new_access').value;
 
-    if(!u || !p) return alert("Preencha usuário e senha!");
+    if(!u || !p) return alert("Preencha tudo!");
 
-    // MODO EDIÇÃO (Atualizar existente)
     if (editingUserIdx !== null) {
-        users[editingUserIdx].user = u;
-        users[editingUserIdx].pass = p;
-        users[editingUserIdx].access = access;
-        alert("✅ Usuário atualizado!");
-        window.cancelarEdicaoUser(); // Sai do modo edição
-    } 
-    // MODO CRIAÇÃO (Novo)
-    else {
-        if(users.find(user => user.user === u)) return alert("Usuário já existe!");
-        
-        users.push({ 
-            user: u, 
-            pass: p, 
-            isAdmin: false, 
-            canEdit: false, 
-            access: access 
-        });
-        alert("✅ Usuário criado!");
+        users[editingUserIdx] = { ...users[editingUserIdx], user:u, pass:p, access:access };
+        alert("✅ Atualizado!");
+        window.cancelarEdicaoUser();
+    } else {
+        if(users.find(x => x.user === u)) return alert("Já existe!");
+        users.push({ user:u, pass:p, isAdmin:false, canEdit:false, access:access });
+        alert("✅ Criado!");
     }
-
-    // Salva no navegador e atualiza a tabela
     localStorage.setItem('estoquePro_users', JSON.stringify(users));
     renderUsers();
-    
-    // Limpa se não estiver editando
-    if (editingUserIdx === null) {
-        document.getElementById('new_user').value = '';
-        document.getElementById('new_pass').value = '';
-    }
+    if (editingUserIdx === null) { document.getElementById('new_user').value = ''; document.getElementById('new_pass').value = ''; }
 }
 
-// 2. EDITAR (Carrega os dados no form)
-window.editarUsuario = function(idx) {
-    const user = users[idx];
-    
-    // Joga os dados nos inputs
-    document.getElementById('new_user').value = user.user;
-    document.getElementById('new_pass').value = user.pass;
-    document.getElementById('new_access').value = user.access || 'all';
-
-    // Ajusta o visual para "Modo Edição"
-    editingUserIdx = idx;
-    document.getElementById('tituloFormUser').innerText = `✏️ Editando: ${user.user}`;
+window.editarUsuario = function(i) {
+    const u = users[i]; 
+    document.getElementById('new_user').value = u.user; 
+    document.getElementById('new_pass').value = u.pass; 
+    document.getElementById('new_access').value = u.access||'all';
+    editingUserIdx = i; 
+    document.getElementById('tituloFormUser').innerText = `✏️ Editando: ${u.user}`; 
     document.getElementById('tituloFormUser').style.color = "#f39c12";
-    
-    const btnSave = document.getElementById('btnSaveUser');
-    btnSave.innerText = "Salvar";
-    btnSave.style.backgroundColor = "#f39c12"; // Laranja
-    
-    document.getElementById('btnCancelUser').style.display = "block"; // Mostra o X
+    document.getElementById('btnSaveUser').innerText = "Salvar"; 
+    document.getElementById('btnSaveUser').style.backgroundColor = "#f39c12";
+    document.getElementById('btnCancelUser').style.display = "block";
 }
 
-// 3. CANCELAR EDIÇÃO
 window.cancelarEdicaoUser = function() {
-    editingUserIdx = null;
-    document.getElementById('new_user').value = '';
-    document.getElementById('new_pass').value = '';
+    editingUserIdx = null; 
+    document.getElementById('new_user').value = ''; 
+    document.getElementById('new_pass').value = ''; 
     document.getElementById('new_access').value = 'all';
-
-    // Volta o visual ao normal
-    document.getElementById('tituloFormUser').innerText = "Novo Usuário";
+    document.getElementById('tituloFormUser').innerText = "Novo Usuário"; 
     document.getElementById('tituloFormUser').style.color = "";
-    
-    const btnSave = document.getElementById('btnSaveUser');
-    btnSave.innerText = "Add";
-    btnSave.style.backgroundColor = ""; // Cor original (azul do CSS)
-    
+    document.getElementById('btnSaveUser').innerText = "Add"; 
+    document.getElementById('btnSaveUser').style.backgroundColor = "";
     document.getElementById('btnCancelUser').style.display = "none";
 }
 
-// 4. DELETAR
-window.delUser = function(idx) {
-    if(confirm('Tem certeza que quer apagar esse usuário?')) {
-        users.splice(idx, 1);
-        localStorage.setItem('estoquePro_users', JSON.stringify(users));
-        
-        // Se estava editando esse cara, cancela a edição
-        if(editingUserIdx === idx) window.cancelarEdicaoUser();
-        
-        renderUsers();
-    }
+window.delUser = function(i) { 
+    if(confirm('Apagar?')) { 
+        users.splice(i, 1); 
+        localStorage.setItem('estoquePro_users', JSON.stringify(users)); 
+        if(editingUserIdx === i) window.cancelarEdicaoUser();
+        renderUsers(); 
+    } 
 }
 
-// 5. PERMISSÕES (Checkbox)
-window.togglePerm = function(idx, tipo) {
-    users[idx][tipo] = !users[idx][tipo];
-    localStorage.setItem('estoquePro_users', JSON.stringify(users));
+window.togglePerm = function(i,t) { 
+    users[i][t] = !users[i][t]; 
+    localStorage.setItem('estoquePro_users', JSON.stringify(users)); 
 }
 
-// 6. RENDERIZAR TABELA (Com nomes bonitos e botões)
 function renderUsers() {
-    const tb = document.querySelector('#tabelaUsers tbody');
-    tb.innerHTML = '';
-    
-    const nomesAcesso = {
-        'all': '<span style="color:blue; font-weight:bold;">🌍 Total</span>',
-        'estoque_ventura': '🏠 Ventura',
-        'estoque_contento': '🏢 Contento'
+    const tb = document.querySelector('#tabelaUsers tbody'); tb.innerHTML = '';
+    const nomes = { 
+        'all':'<span style="color:blue;font-weight:bold">🌍 Total</span>', 
+        'estoque_casa':'📦 Casa', 
+        'estoque_ventura':'🏠 Ventura', 
+        'estoque_contento':'🏢 Contento' 
     };
-
-    users.forEach((u, idx) => {
-        const isMe = u.user === 'Expeto'; // Protege você
+    
+    users.forEach((u, i) => {
+        const isMe = u.user === 'Expeto';
+        const del = isMe ? '' : `<button onclick="window.delUser(${i})" style="color:red;border:none;background:none;cursor:pointer;font-size:1.1rem">🗑️</button>`;
+        const edit = `<button onclick="window.editarUsuario(${i})" style="color:orange;border:none;background:none;cursor:pointer;font-size:1.1rem;margin-right:5px">✏️</button>`;
         
-        // Botões
-        const btnEdit = `<button onclick="window.editarUsuario(${idx})" title="Editar" style="color:#f39c12;border:none;background:none;cursor:pointer;font-size:1.2rem;margin-right:8px;">✏️</button>`;
-        const btnDel = isMe ? '' : `<button onclick="window.delUser(${idx})" title="Excluir" style="color:red;border:none;background:none;cursor:pointer;font-size:1.2rem;">🗑️</button>`;
-        
-        const displayAccess = nomesAcesso[u.access] || 'Total';
-
         tb.innerHTML += `
-            <tr style="border-bottom:1px solid #eee;">
-                <td style="padding:10px;"><strong>${u.user}</strong></td>
-                <td style="padding:10px; font-size:0.85rem;">${displayAccess}</td>
-                <td style="text-align:center;"><input type="checkbox" ${u.canEdit?'checked':''} onchange="window.togglePerm(${idx},'canEdit')" ${isMe?'disabled':''}></td>
-                <td style="text-align:center;"><input type="checkbox" ${u.isAdmin?'checked':''} onchange="window.togglePerm(${idx},'isAdmin')" ${isMe?'disabled':''}></td>
-                <td style="text-align:center;">
-                    ${btnEdit}
-                    ${btnDel}
-                </td>
-            </tr>
-        `;
+            <tr style="border-bottom:1px solid #eee">
+                <td style="padding:10px"><strong>${u.user}</strong></td>
+                <td style="padding:10px">${nomes[u.access]||u.access}</td>
+                <td style="text-align:center"><input type="checkbox" ${u.canEdit?'checked':''} onchange="window.togglePerm(${i},'canEdit')" ${isMe?'disabled':''}></td>
+                <td style="text-align:center"><input type="checkbox" ${u.isAdmin?'checked':''} onchange="window.togglePerm(${i},'isAdmin')" ${isMe?'disabled':''}></td>
+                <td style="text-align:center">${edit}${del}</td>
+            </tr>`;
     });
 }
+
+// --- 8. MODAIS ---
+const mProd = document.getElementById('modalProduto');
+window.abrirModal = function(id) { 
+    if(!currentUser?.canEdit) return alert('Sem permissão'); 
+    mProd.classList.add('active'); 
+    document.getElementById('m_id').value=''; 
+    document.querySelectorAll('#modalProduto input').forEach(i=>i.value=''); 
+    
+    if(id){
+        const i=itens.find(x=>x.id==id); 
+        document.getElementById('m_id').value=i.id; 
+        document.getElementById('m_nome').value=i.nome; 
+        document.getElementById('m_categoria').value=i.categoria; 
+        document.getElementById('m_qtd').value=i.initial; 
+        document.getElementById('m_min').value=i.min; 
+        document.getElementById('m_preco').value=i.preco;
+        document.getElementById('modalTitle').innerText = 'Editar Produto';
+    } else {
+        document.getElementById('modalTitle').innerText = 'Novo Produto';
+    }
+}
+window.fecharModal = function() { mProd.classList.remove('active'); }
+
+const mAdm = document.getElementById('modalAdmin');
+window.abrirAdmin = function() { mAdm.classList.add('active'); renderUsers(); }
+window.fecharAdmin = function() { mAdm.classList.remove('active'); }
+
+const mRel = document.getElementById('modalRelatorio');
+window.verDivergencias = function() { 
+    const l=document.getElementById('listaDivergencias'); l.innerHTML=''; 
+    let hasError = false;
+    itens.forEach(i=>{ 
+        if(i.real!==''){ 
+            const diff=parseInt(i.real)-((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)); 
+            if(diff!==0) {
+                hasError = true;
+                const cor = diff > 0 ? 'blue' : 'red';
+                const sinal = diff > 0 ? '+' : '';
+                l.innerHTML+=`<li style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;"><span>${i.nome}</span> <b style="color:${cor}">${sinal}${diff}</b></li>`; 
+            }
+        } 
+    }); 
+    if(!hasError) l.innerHTML = '<li style="padding:15px; text-align:center; color:green;">✅ Tudo certo por aqui!</li>';
+    mRel.classList.add('active'); 
+}
+window.fecharRelatorio = function() { mRel.classList.remove('active'); }
