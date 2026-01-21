@@ -153,27 +153,46 @@
     </div>
 
     <div class="modal-overlay" id="modalAdmin">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h2>👑 Usuários</h2>
-                <button class="btn-close" onclick="window.fecharAdmin()"><i class='bx bx-x'></i></button>
-            </div>
-            <div class="modal-body">
-                <div style="background:#f8f9fa; padding:15px; border-radius:8px;">
-                    <h3>Novo Usuário</h3>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr auto; gap:10px;">
-                        <input type="text" id="new_user" placeholder="User">
-                        <input type="text" id="new_pass" placeholder="Senha">
-                        <button class="btn-save" onclick="window.adicionarUsuario()">Add</button>
-                    </div>
+    <div class="modal-box" style="width: 650px; max-width: 95%;">
+        <div class="modal-header">
+            <h2>👑 Gestão de Usuários</h2>
+            <button class="btn-close" onclick="window.fecharAdmin()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+            <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid #eee;">
+                <h3 style="margin-bottom:10px; font-size:1rem;">Novo Usuário</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1.5fr auto; gap:10px; align-items:center;">
+                    <input type="text" id="new_user" placeholder="Login" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    
+                    <input type="text" id="new_pass" placeholder="Senha" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    
+                    <select id="new_access" style="padding:8px; border:1px solid #ddd; border-radius:4px; font-weight:500;">
+                        <option value="all">🌍 Acesso Total (Todas)</option>
+                        <option value="estoque_ventura">🏠 Apenas Ventura</option>
+                        <option value="estoque_contento">🏢 Apenas Contento</option>
+                    </select>
+                    
+                    <button class="btn-save" onclick="window.adicionarUsuario()">Add</button>
                 </div>
-                <table id="tabelaUsers" style="width:100%; margin-top:15px;">
-                    <thead><tr><th>User</th><th>Edit?</th><th>Adm?</th><th>Del</th></tr></thead>
+            </div>
+            
+            <div style="overflow-x:auto;">
+                <table id="tabelaUsers" style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                    <thead>
+                        <tr style="background:#eee; text-align:left; color:#555;">
+                            <th style="padding:10px;">Usuário</th>
+                            <th style="padding:10px;">Permissão</th>
+                            <th style="padding:10px; text-align:center;">Pode Editar?</th>
+                            <th style="padding:10px; text-align:center;">É Admin?</th>
+                            <th style="padding:10px; text-align:center;">Ação</th>
+                        </tr>
+                    </thead>
                     <tbody></tbody>
                 </table>
             </div>
         </div>
     </div>
+</div>
 
     <div class="modal-overlay" id="modalRelatorio">
         <div class="modal-box">

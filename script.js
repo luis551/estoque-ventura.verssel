@@ -23,44 +23,51 @@ let currentLoja = 'estoque_ventura'; // Começa na Ventura
 let unsubscribe = null; // Para parar de ouvir a loja antiga
 
 // Usuários (Local Storage)
+// Usuários (Adicionei o campo 'access' no padrão)
 let users = JSON.parse(localStorage.getItem('estoquePro_users')) || [
-    { user: 'Expeto', pass: '1511', isAdmin: true, canEdit: true }
+    { user: 'Expeto', pass: '1511', isAdmin: true, canEdit: true, access: 'all' }
 ];
 
-// --- 1. FUNÇÃO PARA TROCAR DE LOJA (AS ABAS) ---
+// --- FUNÇÃO PARA TROCAR DE LOJA (COM SEGURANÇA) ---
 window.trocarLoja = function(novaLoja) {
+    // 1. SEGURANÇA: Se não for 'all' e tentar acessar outra loja, bloqueia
+    if (currentUser && currentUser.access !== 'all' && currentUser.access !== novaLoja) {
+        return alert("⛔ ACESSO NEGADO: Você não tem permissão para esta loja.");
+    }
+
     currentLoja = novaLoja;
     
-    // Atualiza visual dos botões (Abas)
+    // 2. Atualiza Botões Visuais
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    if(novaLoja.includes('ventura')) document.getElementById('btn-ventura').classList.add('active');
-    if(novaLoja.includes('contento')) document.getElementById('btn-contento').classList.add('active');
+    
+    // Só marca como ativo se o botão estiver visível
+    const btnV = document.getElementById('btn-ventura');
+    const btnC = document.getElementById('btn-contento');
+    
+    if(novaLoja.includes('ventura') && btnV) btnV.classList.add('active');
+    if(novaLoja.includes('contento') && btnC) btnC.classList.add('active');
 
-    // Troca o título lá em cima
+    // 3. Atualiza Títulos
     const titulos = { 'estoque_ventura': 'LOJA VENTURA', 'estoque_contento': 'LOJA CONTENTO' };
     const nomeLoja = titulos[novaLoja] || 'ESTOQUE';
     
     const tituloEl = document.getElementById('tituloLoja');
     if(tituloEl) tituloEl.innerHTML = nomeLoja;
-    
+
     const subTituloEl = document.getElementById('subtituloLoja');
     if(subTituloEl) subTituloEl.innerHTML = `Produtos (${nomeLoja})`;
 
-    // Desconecta da loja antiga e conecta na nova
+    // 4. Carrega os dados do banco
     if(unsubscribe) unsubscribe();
-    
-    // ATENÇÃO: Aqui definimos qual coleção do banco vamos usar!
     const novaRef = collection(db, currentLoja);
-    
     unsubscribe = onSnapshot(novaRef, (snapshot) => {
         itens = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        // Ordena por nome (A-Z)
         itens.sort((a,b) => (a.nome || "").localeCompare(b.nome || ""));
         renderizarInterface();
     });
 }
 
-// --- 2. LOGIN ---
+// --- LOGIN (FILTRO DE ACESSO) ---
 window.fazerLogin = function() {
     const u = document.getElementById('loginUser').value;
     const p = document.getElementById('loginPass').value;
@@ -69,18 +76,41 @@ window.fazerLogin = function() {
     if (found) {
         currentUser = found;
         
-        // Esconde login e mostra sistema
+        // Garante compatibilidade com usuários antigos (se não tiver access, vira 'all')
+        if(!currentUser.access) currentUser.access = 'all';
+
+        // Mostra a tela
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-content').style.display = 'block';
-        document.getElementById('sidebarLoja').style.display = 'flex'; // Mostra a barra lateral
-        document.body.classList.add('logado'); // Ajusta CSS
+        document.getElementById('sidebarLoja').style.display = 'flex';
+        document.body.classList.add('logado');
 
-        // Permissões de Admin na Sidebar
+        // Botão Admin só aparece se for Admin
         const btnAdm = document.getElementById('btnAdminSide');
         if(btnAdm) btnAdm.style.display = found.isAdmin ? 'flex' : 'none';
         
-        // Inicia na Loja Ventura
-        window.trocarLoja('estoque_ventura');
+        // --- FILTRO DE BOTÕES DA BARRA LATERAL ---
+        const btnVentura = document.getElementById('btn-ventura');
+        const btnContento = document.getElementById('btn-contento');
+
+        // Reseta (mostra todos)
+        btnVentura.style.display = 'flex';
+        btnContento.style.display = 'flex';
+
+        // Aplica a regra
+        if (currentUser.access === 'estoque_ventura') {
+            btnContento.style.display = 'none'; // Esconde Contento
+            window.trocarLoja('estoque_ventura'); // Entra na Ventura
+        } 
+        else if (currentUser.access === 'estoque_contento') {
+            btnVentura.style.display = 'none'; // Esconde Ventura
+            window.trocarLoja('estoque_contento'); // Entra na Contento
+        } 
+        else {
+            // Se for 'all', mostra tudo e entra na padrão
+            window.trocarLoja('estoque_ventura');
+        }
+
     } else {
         document.getElementById('loginMsg').innerText = "Senha incorreta!";
     }
@@ -297,29 +327,60 @@ window.verDivergencias = function() {
 }
 window.fecharRelatorio = function() { modalRelatorio.classList.remove('active'); }
 
-// --- USUÁRIOS ---
+// --- SISTEMA DE USUÁRIOS (ATUALIZADO) ---
 window.adicionarUsuario = function() {
     const u = document.getElementById('new_user').value;
     const p = document.getElementById('new_pass').value;
+    const access = document.getElementById('new_access').value; // Pega o acesso escolhido
+
     if(u && p) {
-        users.push({ user:u, pass:p, isAdmin:false, canEdit:false });
+        if(users.find(user => user.user === u)) return alert("Usuário já existe!");
+
+        users.push({ 
+            user: u, 
+            pass: p, 
+            isAdmin: false, 
+            canEdit: false, 
+            access: access // Salva: 'all', 'estoque_ventura' ou 'estoque_contento'
+        });
+        
         localStorage.setItem('estoquePro_users', JSON.stringify(users));
         renderUsers();
+        
+        // Limpa campos
+        document.getElementById('new_user').value = '';
+        document.getElementById('new_pass').value = '';
+    } else {
+        alert("Preencha usuário e senha!");
     }
 }
+
 function renderUsers() {
     const tb = document.querySelector('#tabelaUsers tbody');
     tb.innerHTML = '';
+    
+    // Dicionário para mostrar nomes bonitos na tabela
+    const nomesAcesso = {
+        'all': '<span style="color:blue; font-weight:bold;">🌍 Total</span>',
+        'estoque_ventura': '🏠 Ventura',
+        'estoque_contento': '🏢 Contento'
+    };
+
     users.forEach((u, idx) => {
         const isMe = u.user === 'Expeto';
         const btnDel = isMe ? '' : `<button onclick="window.delUser(${idx})" style="color:red;border:none;background:none;cursor:pointer">🗑️</button>`;
-        tb.innerHTML += `<tr><td>${u.user}</td><td><input type=\"checkbox\" ${u.canEdit?'checked':''} onchange=\"window.togglePerm(${idx},'canEdit')\" ${isMe?'disabled':''}></td><td><input type=\"checkbox\" ${u.isAdmin?'checked':''} onchange=\"window.togglePerm(${idx},'isAdmin')\" ${isMe?'disabled':''}></td><td>${btnDel}</td></tr>`;
+        
+        // Pega o nome bonito ou usa o código se der erro
+        const displayAccess = nomesAcesso[u.access] || 'Total';
+
+        tb.innerHTML += `
+            <tr style="border-bottom:1px solid #eee;">
+                <td style="padding:10px;"><strong>${u.user}</strong></td>
+                <td style="padding:10px;">${displayAccess}</td>
+                <td style="text-align:center;"><input type="checkbox" ${u.canEdit?'checked':''} onchange="window.togglePerm(${idx},'canEdit')" ${isMe?'disabled':''}></td>
+                <td style="text-align:center;"><input type="checkbox" ${u.isAdmin?'checked':''} onchange="window.togglePerm(${idx},'isAdmin')" ${isMe?'disabled':''}></td>
+                <td style="text-align:center;">${btnDel}</td>
+            </tr>
+        `;
     });
-}
-window.togglePerm = function(idx, tipo) {
-    users[idx][tipo] = !users[idx][tipo];
-    localStorage.setItem('estoquePro_users', JSON.stringify(users));
-}
-window.delUser = function(idx) {
-    if(confirm('Apagar?')) { users.splice(idx,1); localStorage.setItem('estoquePro_users', JSON.stringify(users)); renderUsers(); }
 }
