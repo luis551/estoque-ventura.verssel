@@ -27,7 +27,9 @@
         </div>
         
         <nav class="nav-menu">
-            <p class="nav-label">LOJAS DISPONÍVEIS</p> <button class="nav-btn" id="btn-casa" onclick="window.trocarLoja('estoque_casa')">
+            <p class="nav-label">LOJAS DISPONÍVEIS</p>
+            
+            <button class="nav-btn" id="btn-casa" onclick="window.trocarLoja('estoque_casa')">
                 <i class='bx bxs-package'></i> Casa (Central)
             </button>
 
@@ -152,48 +154,57 @@
                 <button class="btn-close" onclick="window.fecharAdmin()"><i class='bx bx-x'></i></button>
             </div>
             <div class="modal-body">
-                
-                <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid #eee;">
-                    <h3 id="tituloFormUser" style="margin-bottom:10px; font-size:1rem; font-weight:bold;">Novo Usuário</h3>
-                    
-                    <div style="display:flex; flex-direction:column; gap:10px;">
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                            <input type="text" id="new_user" placeholder="Login" style="padding:10px; border:1px solid #ddd; border-radius:4px;">
-                            <input type="text" id="new_pass" placeholder="Senha" style="padding:10px; border:1px solid #ddd; border-radius:4px;">
-                        </div>
+    
+    <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid #eee;">
+        <h3 id="tituloFormUser" style="margin-bottom:10px; font-size:1rem; font-weight:bold;">Novo Usuário</h3>
+        
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <input type="text" id="new_user" placeholder="Login" style="padding:10px; border:1px solid #ddd; border-radius:4px;">
+                <input type="text" id="new_pass" placeholder="Senha" style="padding:10px; border:1px solid #ddd; border-radius:4px;">
+            </div>
 
-                        <div style="display:flex; gap:10px;">
-                            <select id="new_access" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:4px; font-weight:500;">
-                                <option value="all">🌍 Acesso Total (Todas)</option>
-                                <option value="estoque_casa">📦 Apenas Casa (Central)</option>
-                                <option value="estoque_ventura">🏠 Apenas Ventura</option>
-                                <option value="estoque_contento">🏢 Apenas Contento</option>
-                            </select>
-                            
-                            <button id="btnCancelUser" onclick="window.cancelarEdicaoUser()" style="display:none; background:#95a5a6; color:white; border:none; padding:0 15px; border-radius:6px; cursor:pointer; font-weight:bold;">✖</button>
-                            
-                            <button id="btnSaveUser" class="btn-save" onclick="window.salvarUsuario()" style="width:100px;">Add</button>
-                        </div>
-                    </div>
-                </div>
+            <div style="display:flex; flex-direction:column; gap:5px; background:white; padding:10px; border:1px solid #ddd; border-radius:4px;">
+                <label style="font-weight:bold; font-size:0.8rem; color:#666;">LIBERAR ACESSO A:</label>
                 
-                <div style="overflow-x:auto;">
-                    <table id="tabelaUsers" style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-                        <thead>
-                            <tr style="background:#eee; text-align:left; color:#555;">
-                                <th style="padding:10px;">User</th>
-                                <th style="padding:10px;">Acesso</th>
-                                <th style="padding:10px; text-align:center;">Edit?</th>
-                                <th style="padding:10px; text-align:center;">Adm?</th>
-                                <th style="padding:10px; text-align:center;">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+                <div style="display:flex; gap:15px; flex-wrap:wrap;">
+                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                        <input type="checkbox" class="chk-access" value="estoque_casa"> 📦 Casa
+                    </label>
+                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                        <input type="checkbox" class="chk-access" value="estoque_ventura"> 🏠 Ventura
+                    </label>
+                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                        <input type="checkbox" class="chk-access" value="estoque_contento"> 🏢 Contento
+                    </label>
+                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer; color:blue; font-weight:bold;">
+                        <input type="checkbox" id="chk_all" onchange="toggleAllAccess(this)"> 🌍 TUDO
+                    </label>
                 </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button id="btnCancelUser" onclick="window.cancelarEdicaoUser()" style="display:none; background:#95a5a6; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer; font-weight:bold;">Cancelar</button>
+                <button id="btnSaveUser" class="btn-save" onclick="window.salvarUsuario()" style="width:100px;">Salvar</button>
             </div>
         </div>
     </div>
+    
+    <div style="overflow-x:auto;">
+        <table id="tabelaUsers" style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+            <thead>
+                <tr style="background:#eee; text-align:left; color:#555;">
+                    <th style="padding:10px;">User</th>
+                    <th style="padding:10px;">Acessos Liberados</th>
+                    <th style="padding:10px; text-align:center;">Edit?</th>
+                    <th style="padding:10px; text-align:center;">Adm?</th>
+                    <th style="padding:10px; text-align:center;">Ações</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
 
     <div class="modal-overlay" id="modalRelatorio">
         <div class="modal-box">
