@@ -93,16 +93,19 @@ window.fazerLogin = function() {
     const found = users.find(user => user.user === u && user.pass === p);
 
     if (found) {
-        currentUser = found;
-        if(!currentUser.access) currentUser.access = 'all';
+    currentUser = found;
+    if(!currentUser.access) currentUser.access = 'all';
 
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('app-content').style.display = 'block';
-        document.getElementById('sidebarLoja').style.display = 'flex';
-        document.body.classList.add('logado');
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-content').style.display = 'block';
+    document.getElementById('sidebarLoja').style.display = 'flex';
+    document.body.classList.add('logado');
 
         const btnLogs = document.getElementById('btnLogsSide');
-if(btnLogs) btnLogs.style.display = found.isAdmin ? 'flex' : 'none';
+    const btnAdmin = document.getElementById('btnAdminSide');
+
+    if(btnLogs) btnLogs.style.display = found.isAdmin ? 'flex' : 'none';
+    if(btnAdmin) btnAdmin.style.display = found.isAdmin ? 'flex' : 'none';
         
         // Filtro de Botões da Sidebar (QUEM VÊ O QUE?)
         const btnV = document.getElementById('btn-ventura');
