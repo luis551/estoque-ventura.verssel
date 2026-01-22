@@ -24,11 +24,18 @@ let itens = [];
 let currentUser = null;
 let currentLoja = 'estoque_ventura'; 
 let unsubscribe = null; 
+let unsubscribeUsers = null; // Nova variável pra ouvir os usuários
 
-// Usuários (Local Storage) - Agora o access pode ser 'all' ou um Array ['loja1', 'loja2']
-let users = JSON.parse(localStorage.getItem('estoquePro_users')) || [
-    { user: 'Expeto', pass: '1511', isAdmin: true, canEdit: true, access: 'all' }
-];
+// EM VEZ DE LER DO LOCALSTORAGE, A GENTE INICIA VAZIO
+let users = [];
+
+// --- CARREGAR USUÁRIOS DO FIREBASE (NOVA FUNÇÃO) ---
+// Coloca isso logo depois das variáveis globais
+const usersRef = collection(db, "usuarios"); // Vai criar uma coleção 'usuarios' lá no banco
+unsubscribeUsers = onSnapshot(usersRef, (snapshot) => {
+    users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    renderUsers(); // Atualiza a tabela sempre que mudar algo no banco
+});
 
 // --- 1. FUNÇÃO PARA TROCAR DE LOJA ---
 window.trocarLoja = function(novaLoja) {
@@ -133,39 +140,63 @@ window.fazerLogin = function() {
 }
 window.fazerLogout = function() { location.reload(); }
 
-// --- 3. ATUALIZAR VALOR (COM TRANSFERÊNCIA) ---
+// --- 3. ATUALIZAR VALOR (COM TRANSFERÊNCIA E LOGS 🕵️‍♂️) ---
 window.atualizarValor = async function(id, campo, valor) {
+    // Tratamento do valor (igual antes)
     const valFinal = (campo === 'real' && valor === '') ? '' : (parseInt(valor) || 0);
     const docRef = doc(db, currentLoja, id);
-    try {
-        if (currentLoja !== 'estoque_casa' && campo === 'entry') {
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const dadosAtuais = docSnap.data();
-                const valorAntigo = dadosAtuais.entry || 0;
-                const diferenca = valFinal - valorAntigo;
-                const nomeProduto = dadosAtuais.nome;
 
-                if (diferenca !== 0) {
-                    const q = query(collection(db, "estoque_casa"), where("nome", "==", nomeProduto));
-                    const querySnapshot = await getDocs(q);
-                    if (!querySnapshot.empty) {
-                        querySnapshot.forEach(async (docCasa) => {
-                            const estoqueAtualCasa = docCasa.data().initial || 0;
-                            const novoEstoqueCasa = estoqueAtualCasa - diferenca;
-                            await updateDoc(doc(db, "estoque_casa", docCasa.id), { initial: novoEstoqueCasa });
-                            if(diferenca > 0) alert(`🚚 ABASTECIMENTO:\nSaiu ${diferenca}x ${nomeProduto} da CASA.`);
-                            else alert(`↩️ DEVOLUÇÃO:\nVoltou ${Math.abs(diferenca)}x ${nomeProduto} para a CASA.`);
-                        });
-                    }
+    try {
+        // 1. Antes de tudo, vamos buscar os dados do item pra saber o NOME dele
+        const docSnap = await getDoc(docRef);
+        let nomeProduto = 'Item Desconhecido';
+        let dadosAtuais = {};
+
+        if (docSnap.exists()) {
+            dadosAtuais = docSnap.data();
+            nomeProduto = dadosAtuais.nome || 'Sem Nome';
+        }
+
+        // 2. Lógica de Transferência da Casa (Mantivemos a sua lógica original intacta)
+        if (currentLoja !== 'estoque_casa' && campo === 'entry') {
+            const valorAntigo = dadosAtuais.entry || 0;
+            const diferenca = valFinal - valorAntigo;
+
+            if (diferenca !== 0) {
+                const q = query(collection(db, "estoque_casa"), where("nome", "==", nomeProduto));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    querySnapshot.forEach(async (docCasa) => {
+                        const estoqueAtualCasa = docCasa.data().initial || 0;
+                        const novoEstoqueCasa = estoqueAtualCasa - diferenca;
+                        await updateDoc(doc(db, "estoque_casa", docCasa.id), { initial: novoEstoqueCasa });
+                        
+                        if(diferenca > 0) alert(`🚚 ABASTECIMENTO:\nSaiu ${diferenca}x ${nomeProduto} da CASA.`);
+                        else alert(`↩️ DEVOLUÇÃO:\nVoltou ${Math.abs(diferenca)}x ${nomeProduto} para a CASA.`);
+                        
+                        // Opcional: Logar também essa transferência automática
+                        registrarLog("Transferência Automática", `Moveu ${diferenca}x ${nomeProduto} da Casa para ${currentLoja}`);
+                    });
                 }
             }
         }
+
+        // 3. Atualiza o valor no banco (Ação Principal)
         await updateDoc(docRef, { [campo]: valFinal });
-    } catch(e) { console.error(e); }
+
+        // 4. --- AQUI ENTRA O X-9 (REGISTRA O LOG) --- 🕵️‍♂️
+        // Só registra se a função existir (pra não dar erro se tu esqueceu de colar ela)
+        if (typeof registrarLog === "function") {
+            const msgLog = `${nomeProduto} | Campo: ${campo.toUpperCase()} | Valor: ${valFinal}`;
+            registrarLog("Alteração de Saldo", msgLog);
+        }
+
+    } catch(e) { 
+        console.error("Erro ao atualizar e logar:", e); 
+    }
 }
 
-// --- 4. SALVAR PRODUTO ---
+// --- 4. SALVAR PRODUTO (COM LOG DE CRIAÇÃO/EDIÇÃO) ---
 window.salvarProduto = async function() {
     const id = document.getElementById('m_id').value;
     const nome = document.getElementById('m_nome').value.toUpperCase();
@@ -173,38 +204,96 @@ window.salvarProduto = async function() {
     const qtdIni = parseInt(document.getElementById('m_qtd').value) || 0;
     const min = parseInt(document.getElementById('m_min').value) || 1;
     const preco = parseFloat(document.getElementById('m_preco').value) || 0;
+    
     if (!nome) return alert("Preencha o nome!");
+    
     try {
-        if (id) await updateDoc(doc(db, currentLoja, id), { nome, categoria: cat, min, preco });
-        else await addDoc(collection(db, currentLoja), { nome, categoria: cat, initial: qtdIni, min, preco, entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: '' });
+        if (id) {
+            // --- MODO EDIÇÃO ---
+            await updateDoc(doc(db, currentLoja, id), { nome, categoria: cat, min, preco });
+            
+            // X-9: Registra que editou
+            if (typeof registrarLog === "function") {
+                registrarLog("Edição de Produto", `Alterou dados de: ${nome}`);
+            }
+        } 
+        else {
+            // --- MODO CRIAÇÃO ---
+            await addDoc(collection(db, currentLoja), { 
+                nome, categoria: cat, initial: qtdIni, min, preco, 
+                entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: '' 
+            });
+            
+            // X-9: Registra que criou novo
+            if (typeof registrarLog === "function") {
+                registrarLog("Novo Produto", `Criou: ${nome} | Estoque Inicial: ${qtdIni}`);
+            }
+        }
         window.fecharModal();
-    } catch (e) { alert("Erro ao salvar: " + e.message); }
-}
-
-// --- 5. DELETAR E FECHAR SEMANA ---
-window.deletarProduto = async function(id) {
-    if(!currentUser || !currentUser.canEdit) return alert("Sem permissão!");
-    if (confirm("Apagar produto desta loja?")) {
-        try { await deleteDoc(doc(db, currentLoja, id)); } catch (e) { alert("Erro: " + e.message); }
+    } catch (e) { 
+        alert("Erro ao salvar: " + e.message); 
     }
 }
+
+// --- 5. DELETAR PRODUTO (COM LOG DE EXCLUSÃO) ---
+window.deletarProduto = async function(id) {
+    if(!currentUser || !currentUser.canEdit) return alert("Sem permissão!");
+    
+    if (confirm("Tem certeza que quer apagar esse produto?")) {
+        try { 
+            // 1. Busca o nome antes de deletar (pra saber quem morreu)
+            const docSnap = await getDoc(doc(db, currentLoja, id));
+            let nomeItem = "Item Desconhecido";
+            if (docSnap.exists()) {
+                nomeItem = docSnap.data().nome;
+            }
+
+            // 2. Deleta
+            await deleteDoc(doc(db, currentLoja, id)); 
+            
+            // 3. X-9: Registra o óbito
+            if (typeof registrarLog === "function") {
+                registrarLog("Exclusão", `Apagou o item: ${nomeItem}`);
+            }
+
+        } catch (e) { 
+            alert("Erro: " + e.message); 
+        }
+    }
+}
+// --- 6. FECHAR SEMANA (COM LOG GERAL) ---
 window.fecharSemana = async function() {
     if(!currentUser || !currentUser.isAdmin) return alert("Apenas Admin!");
+    
     if(!confirm(`⚠️ FECHAR CAIXA?\n\nO estoque REAL vira o INICIAL.\nEntradas/Saídas zeram.\nConfirma?`)) return;
+
     try {
         const batch = writeBatch(db);
+        
         itens.forEach(i => {
             const docRef = doc(db, currentLoja, i.id);
             const ini=i.initial||0; const ent=i.entry||0; const sale=i.sales||0; const int=i.internal||0; const vou=i.voucher||0; const dam=i.damage||0;
+            
+            // Calcula o novo inicial baseado no Real ou no Sistema
             let novoInicial = ini + ent - sale - int - vou - dam;
             if (i.real !== '' && i.real !== undefined) novoInicial = parseInt(i.real);
+            
+            // Prepara a atualização
             batch.update(docRef, { initial: novoInicial, entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: '' });
         });
-        await batch.commit();
-        alert(`✅ Semana fechada!`);
-    } catch(e) { alert("Erro: " + e.message); }
-}
 
+        await batch.commit();
+        
+        // X-9: Registra que a semana fechou
+        if (typeof registrarLog === "function") {
+            registrarLog("Fechamento de Caixa", `Zerou movimentos e atualizou estoque inicial de ${itens.length} itens.`);
+        }
+        
+        alert(`✅ Semana fechada com sucesso!`);
+    } catch(e) { 
+        alert("Erro: " + e.message); 
+    }
+}
 // --- 6. RENDERIZAÇÃO ---
 function renderizarInterface() {
     const isAdmin = currentUser && currentUser.isAdmin;
@@ -261,15 +350,16 @@ function renderizarInterface() {
     });
 }
 
-// --- 7. SISTEMA DE USUÁRIOS (NOVA LÓGICA DE CHECKBOX) ---
-let editingUserIdx = null;
+// --- 7. SISTEMA DE USUÁRIOS (AGORA NA NUVEM ☁️) ---
+let editingUserId = null; // Agora guarda o ID do Firestore, não o índice
 
-// Helper para pegar checkboxes
+// Helper para pegar checkboxes (esse continua igual)
 window.toggleAllAccess = function(source) {
     document.querySelectorAll('.chk-access').forEach(c => c.checked = source.checked);
 }
 
-window.salvarUsuario = function() {
+// SALVAR (CRIAR OU EDITAR) NO FIRESTORE
+window.salvarUsuario = async function() {
     const u = document.getElementById('new_user').value;
     const p = document.getElementById('new_pass').value;
     
@@ -285,30 +375,49 @@ window.salvarUsuario = function() {
     if(!u || !p) return alert("Preencha usuário e senha!");
     if(Array.isArray(accessList) && accessList.length === 0) return alert("Selecione pelo menos uma loja!");
 
-    if (editingUserIdx !== null) {
-        users[editingUserIdx] = { ...users[editingUserIdx], user:u, pass:p, access:accessList };
-        alert("✅ Atualizado!");
-        window.cancelarEdicaoUser();
-    } else {
-        if(users.find(x => x.user === u)) return alert("Já existe!");
-        users.push({ user:u, pass:p, isAdmin:false, canEdit:false, access:accessList });
-        alert("✅ Criado!");
+    try {
+        if (editingUserId) {
+            // EDITAR: Atualiza o doc existente
+            await updateDoc(doc(db, "usuarios", editingUserId), { 
+                user: u, 
+                pass: p, 
+                access: accessList 
+            });
+            alert("✅ Usuário atualizado!");
+            window.cancelarEdicaoUser();
+        } else {
+            // CRIAR: Verifica duplicidade na lista local antes de mandar pro banco
+            if(users.find(x => x.user === u)) return alert("Já existe esse usuário!");
+            
+            await addDoc(collection(db, "usuarios"), { 
+                user: u, 
+                pass: p, 
+                isAdmin: false, 
+                canEdit: false, 
+                access: accessList 
+            });
+            alert("✅ Usuário criado!");
+            // Limpa campos
+            document.getElementById('new_user').value = ''; 
+            document.getElementById('new_pass').value = ''; 
+        }
+    } catch (e) {
+        alert("Erro ao salvar: " + e.message);
     }
-    localStorage.setItem('estoquePro_users', JSON.stringify(users));
-    renderUsers();
-    if (editingUserIdx === null) { document.getElementById('new_user').value = ''; document.getElementById('new_pass').value = ''; }
 }
 
-window.editarUsuario = function(i) {
-    const u = users[i]; 
+// EDITAR (PREENCHE O FORMULÁRIO COM DADOS DO BANCO)
+window.editarUsuario = function(id) {
+    const u = users.find(x => x.id === id); // Busca na lista carregada do firebase
+    if(!u) return;
+
     document.getElementById('new_user').value = u.user; 
     document.getElementById('new_pass').value = u.pass; 
     
-    // Marca os checkboxes
+    // Configura os checkboxes
     const chkAll = document.getElementById('chk_all');
     const checkboxes = document.querySelectorAll('.chk-access');
     
-    // Limpa tudo antes
     chkAll.checked = false;
     checkboxes.forEach(c => c.checked = false);
 
@@ -317,22 +426,24 @@ window.editarUsuario = function(i) {
         checkboxes.forEach(c => c.checked = true);
     } else if (Array.isArray(u.access)) {
         u.access.forEach(loja => {
-            document.querySelectorAll(`.chk-access[value="${loja}"]`).forEach(c => c.checked = true);
+            const el = document.querySelector(`.chk-access[value="${loja}"]`);
+            if(el) el.checked = true;
         });
     }
 
-    editingUserIdx = i; 
+    editingUserId = id; // Marca que estamos editando esse ID
     document.getElementById('tituloFormUser').innerText = `✏️ Editando: ${u.user}`; 
     document.getElementById('btnSaveUser').innerText = "Salvar"; 
     document.getElementById('btnSaveUser').style.backgroundColor = "#f39c12";
     document.getElementById('btnCancelUser').style.display = "block";
 }
 
+// CANCELAR EDIÇÃO
 window.cancelarEdicaoUser = function() {
-    editingUserIdx = null; 
+    editingUserId = null; 
     document.getElementById('new_user').value = ''; 
     document.getElementById('new_pass').value = ''; 
-    // Limpa checks
+    
     document.getElementById('chk_all').checked = false;
     document.querySelectorAll('.chk-access').forEach(c => c.checked = false);
 
@@ -342,29 +453,45 @@ window.cancelarEdicaoUser = function() {
     document.getElementById('btnCancelUser').style.display = "none";
 }
 
-window.delUser = function(i) { 
-    if(confirm('Apagar?')) { 
-        users.splice(i, 1); 
-        localStorage.setItem('estoquePro_users', JSON.stringify(users)); 
-        if(editingUserIdx === i) window.cancelarEdicaoUser();
-        renderUsers(); 
+// DELETAR (DIRETO NO BANCO)
+window.delUser = async function(id) { 
+    if(confirm('Apagar usuário permanentemente?')) { 
+        try {
+            await deleteDoc(doc(db, "usuarios", id));
+            if(editingUserId === id) window.cancelarEdicaoUser();
+        } catch(e) {
+            alert("Erro ao deletar: " + e.message);
+        }
     } 
 }
-window.togglePerm = function(i,t) { users[i][t] = !users[i][t]; localStorage.setItem('estoquePro_users', JSON.stringify(users)); }
 
+// TROCAR PERMISSÃO (ADMIN/EDIT) DIRETO NO BANCO
+window.togglePerm = async function(id, campo, valorAtual) { 
+    try {
+        await updateDoc(doc(db, "usuarios", id), { [campo]: !valorAtual });
+    } catch(e) {
+        console.error(e);
+        alert("Erro ao mudar permissão.");
+    }
+}
+
+// RENDERIZAR TABELA (AGORA USANDO IDs)
 function renderUsers() {
-    const tb = document.querySelector('#tabelaUsers tbody'); tb.innerHTML = '';
+    const tb = document.querySelector('#tabelaUsers tbody'); 
+    tb.innerHTML = '';
     
-    users.forEach((u, i) => {
-        const isMe = u.user === 'Expeto';
-        const del = isMe ? '' : `<button onclick="window.delUser(${i})" style="color:red;border:none;background:none;cursor:pointer;font-size:1.1rem">🗑️</button>`;
-        const edit = `<button onclick="window.editarUsuario(${i})" style="color:orange;border:none;background:none;cursor:pointer;font-size:1.1rem;margin-right:5px">✏️</button>`;
+    users.forEach((u) => {
+        // Se quiser impedir que vc se delete, verifica pelo nome ou ID
+        const isMe = (u.user === 'Expeto'); 
+        
+        // CUIDADO: As aspas dentro do onclick devem ser simples ' ' para não quebrar a string
+        const del = isMe ? '' : `<button onclick="window.delUser('${u.id}')" style="color:red;border:none;background:none;cursor:pointer;font-size:1.1rem">🗑️</button>`;
+        const edit = `<button onclick="window.editarUsuario('${u.id}')" style="color:orange;border:none;background:none;cursor:pointer;font-size:1.1rem;margin-right:5px">✏️</button>`;
         
         let displayAccess = '';
         if (u.access === 'all') {
             displayAccess = '<span style="color:blue;font-weight:bold">🌍 TUDO</span>';
         } else if (Array.isArray(u.access)) {
-            // Cria badges bonitinhos
             u.access.forEach(loja => {
                 let nome = '';
                 if(loja==='estoque_casa') nome='📦 Casa';
@@ -373,20 +500,24 @@ function renderUsers() {
                 displayAccess += `<span style="background:#eee; padding:2px 6px; border-radius:4px; margin-right:3px; font-size:0.8rem;">${nome}</span>`;
             });
         } else {
-             displayAccess = u.access; // Legado
+             displayAccess = u.access; 
         }
 
+        // Checkboxes passam o ID e o valor atual para o togglePerm
         tb.innerHTML += `
             <tr style="border-bottom:1px solid #eee">
                 <td style="padding:10px"><strong>${u.user}</strong></td>
                 <td style="padding:10px">${displayAccess}</td>
-                <td style="text-align:center"><input type="checkbox" ${u.canEdit?'checked':''} onchange="window.togglePerm(${i},'canEdit')" ${isMe?'disabled':''}></td>
-                <td style="text-align:center"><input type="checkbox" ${u.isAdmin?'checked':''} onchange="window.togglePerm(${i},'isAdmin')" ${isMe?'disabled':''}></td>
+                <td style="text-align:center">
+                    <input type="checkbox" ${u.canEdit?'checked':''} onchange="window.togglePerm('${u.id}', 'canEdit', ${u.canEdit})" ${isMe?'disabled':''}>
+                </td>
+                <td style="text-align:center">
+                    <input type="checkbox" ${u.isAdmin?'checked':''} onchange="window.togglePerm('${u.id}', 'isAdmin', ${u.isAdmin})" ${isMe?'disabled':''}>
+                </td>
                 <td style="text-align:center">${edit}${del}</td>
             </tr>`;
     });
 }
-
 // --- 8. MODAIS ---
 const mProd = document.getElementById('modalProduto');
 window.abrirModal = function(id) { 
@@ -407,3 +538,24 @@ window.verDivergencias = function() {
     if(!hasError) l.innerHTML = '<li style="padding:15px; text-align:center; color:green;">✅ Tudo certo por aqui!</li>'; mRel.classList.add('active'); 
 }
 window.fecharRelatorio = function() { mRel.classList.remove('active'); }
+
+// --- FUNÇÃO X-9 (REGISTRAR LOG) ---
+async function registrarLog(acao, detalhes) {
+    if (!currentUser) return; // Se não tem ninguém logado, não registra (ou registra como Anônimo)
+    
+    const logData = {
+        data: new Date().toISOString(), // Data e hora exata
+        usuario: currentUser.user,      // Quem fez (Expeto, Gomes...)
+        loja: currentLoja,              // Onde (Ventura, Contento...)
+        acao: acao,                     // Ex: "Alterou Estoque", "Fechou Semana"
+        detalhes: detalhes              // Ex: "Heineken: 10 -> 12"
+    };
+
+    try {
+        // Salva numa coleção separada chamada 'logs'
+        await addDoc(collection(db, "logs"), logData);
+        console.log("📝 Log registrado:", detalhes);
+    } catch (e) {
+        console.error("Erro ao gravar log:", e);
+    }
+}
