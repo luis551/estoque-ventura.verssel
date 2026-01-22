@@ -633,24 +633,3 @@ window.abrirLogs = async function() {
 window.fecharLogs = function() {
     mLogs.classList.remove('active');
 }
-// --- CÓDIGO DE EMERGÊNCIA (COLE NO FINAL, SALVE E ABRA O SITE) ---
-setTimeout(async () => {
-    // Só tenta criar se a lista estiver vazia (sinal que o banco tá zerado)
-    if(users.length === 0) {
-        console.log("🚑 Tentando criar usuário Mestre...");
-        try {
-            // Cria o usuário Expeto direto na nuvem
-            await addDoc(collection(db, "usuarios"), { 
-                user: "Expeto", 
-                pass: "1511", 
-                access: "all",
-                isAdmin: true,
-                canEdit: true
-            });
-            alert("✅ SUCESSO! Usuário 'Expeto' criado.\nPode tentar logar agora!");
-        } catch(e) {
-            console.error("Erro ao criar usuário:", e);
-            alert("Erro ao conectar no banco: " + e.message);
-        }
-    }
-}, 3000); // Espera 3 segundinhos pro banco conectar
