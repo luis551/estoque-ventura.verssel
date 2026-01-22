@@ -43,9 +43,9 @@
             
             <p class="nav-label" style="margin-top:20px;">SISTEMA</p>
             
-            <button class="nav-btn admin-btn" id="btnAdminSide" onclick="window.abrirAdmin()" style="display:none; color:#f1c40f;">
-                <i class='bx bxs-crown'></i> Admin Usuários
-            </button>
+            <button class="nav-btn admin-btn" id="btnLogsSide" onclick="window.abrirLogs()" style="display:none; color:#e67e22;">
+    <i class='bx bx-notepad'></i> Logs do Sistema
+</button>
 
             <button class="nav-btn logout-btn" onclick="window.fazerLogout()">
                 <i class='bx bx-log-out'></i> Sair
@@ -220,6 +220,22 @@
             </div>
         </div>
     </div>
+    <div class="modal-overlay" id="modalLogs">
+    <div class="modal-box" style="width: 600px; max-width: 95%;">
+        <div class="modal-header">
+            <h2>🕵️‍♂️ Registro de Atividades</h2>
+            <button class="btn-close" onclick="window.fecharLogs()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+            <div id="loadingLogs" style="text-align:center; padding:20px;">Carregando feitiços... 🔮</div>
+            <ul id="listaLogs" style="list-style:none; max-height:400px; overflow-y:auto; padding-right:5px;">
+                </ul>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-save" onclick="window.fecharLogs()">Fechar</button>
+        </div>
+    </div>
+</div>
 
     <script type="module" src="script.js"></script>
 </body>

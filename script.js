@@ -1,8 +1,7 @@
-// --- IMPORTAÇÕES DO FIREBASE ---
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { 
     getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, 
-    onSnapshot, writeBatch, getDoc, query, where, getDocs 
+    onSnapshot, writeBatch, getDoc, query, where, getDocs,
+    orderBy, limit // <--- ADICIONA ESSES DOIS AQUI, IMPORTANTE!
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 // --- SUAS CONFIGURAÇÕES ---
@@ -100,8 +99,8 @@ window.fazerLogin = function() {
         document.getElementById('sidebarLoja').style.display = 'flex';
         document.body.classList.add('logado');
 
-        const btnAdm = document.getElementById('btnAdminSide');
-        if(btnAdm) btnAdm.style.display = found.isAdmin ? 'flex' : 'none';
+        const btnLogs = document.getElementById('btnLogsSide');
+if(btnLogs) btnLogs.style.display = found.isAdmin ? 'flex' : 'none';
         
         // Filtro de Botões da Sidebar (QUEM VÊ O QUE?)
         const btnV = document.getElementById('btn-ventura');
@@ -558,4 +557,77 @@ async function registrarLog(acao, detalhes) {
     } catch (e) {
         console.error("Erro ao gravar log:", e);
     }
+}
+
+// --- 9. SISTEMA DE VISUALIZAÇÃO DE LOGS ---
+const mLogs = document.getElementById('modalLogs');
+
+window.abrirLogs = async function() {
+    if(!currentUser || !currentUser.isAdmin) return alert("Você não tem Nível de Acesso suficiente! 🚫");
+    
+    mLogs.classList.add('active');
+    const lista = document.getElementById('listaLogs');
+    const loading = document.getElementById('loadingLogs');
+    
+    lista.innerHTML = '';
+    loading.style.display = 'block';
+
+    try {
+        // Busca os últimos 50 logs ordenados por data (mais recente primeiro)
+        const q = query(
+            collection(db, "logs"), 
+            orderBy("data", "desc"), 
+            limit(50)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        loading.style.display = 'none';
+
+        if (querySnapshot.empty) {
+            lista.innerHTML = '<li style="text-align:center; color:#999;">Nenhum registro encontrado. O silêncio reina. 🦗</li>';
+            return;
+        }
+
+        querySnapshot.forEach((doc) => {
+            const d = doc.data();
+            // Formata a data pra ficar bonitinha (pt-BR)
+            const dataObj = new Date(d.data);
+            const dataFormatada = dataObj.toLocaleString('pt-BR');
+
+            // Define cor baseada na ação
+            let corIcone = '#95a5a6';
+            let icone = 'bx-circle';
+            
+            if(d.acao.includes('Alteração')) { corIcone = '#3498db'; icone = 'bx-edit'; }
+            if(d.acao.includes('Novo')) { corIcone = '#2ecc71'; icone = 'bx-plus-circle'; }
+            if(d.acao.includes('Exclusão')) { corIcone = '#e74c3c'; icone = 'bx-trash'; }
+            if(d.acao.includes('Fechamento')) { corIcone = '#9b59b6'; icone = 'bx-calendar-check'; }
+
+            const html = `
+                <li style="border-bottom:1px solid #eee; padding:10px 0; display:flex; gap:10px;">
+                    <div style="font-size:1.5rem; color:${corIcone}; display:flex; align-items:center;">
+                        <i class='bx ${icone}'></i>
+                    </div>
+                    <div style="flex:1;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#666; margin-bottom:2px;">
+                            <strong>👤 ${d.usuario}</strong>
+                            <span>${dataFormatada}</span>
+                        </div>
+                        <div style="font-weight:bold; color:#333;">${d.acao} <span style="font-weight:normal; font-size:0.8rem; background:#f0f0f0; padding:2px 6px; border-radius:4px;">${d.loja}</span></div>
+                        <div style="font-size:0.9rem; color:#555; margin-top:2px;">${d.detalhes}</div>
+                    </div>
+                </li>
+            `;
+            lista.innerHTML += html;
+        });
+
+    } catch (e) {
+        console.error(e);
+        loading.innerHTML = `<span style="color:red">Erro ao carregar logs: ${e.message}</span>`;
+        // DICA: Se der erro de índice no console, o Firebase vai mandar um link. Clica nele pra criar o índice automático!
+    }
+}
+
+window.fecharLogs = function() {
+    mLogs.classList.remove('active');
 }
