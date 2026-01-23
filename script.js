@@ -200,12 +200,15 @@ window.atualizarValor = async function(id, campo, valor) {
     }
 }
 
-// --- 4. SALVAR PRODUTO (COM LOG DE CRIAÇÃO/EDIÇÃO) ---
+// --- 4. SALVAR PRODUTO (CORRIGIDO PARA SALVAR ESTOQUE INICIAL) ---
 window.salvarProduto = async function() {
     const id = document.getElementById('m_id').value;
     const nome = document.getElementById('m_nome').value.toUpperCase();
     const cat = document.getElementById('m_categoria').value.toUpperCase() || 'GERAL';
+    
+    // Captura o valor do campo de Estoque Inicial
     const qtdIni = parseInt(document.getElementById('m_qtd').value) || 0;
+    
     const min = parseInt(document.getElementById('m_min').value) || 1;
     const preco = parseFloat(document.getElementById('m_preco').value) || 0;
     
@@ -214,11 +217,18 @@ window.salvarProduto = async function() {
     try {
         if (id) {
             // --- MODO EDIÇÃO ---
-            await updateDoc(doc(db, currentLoja, id), { nome, categoria: cat, min, preco });
+            // O ERRO TAVA AQUI: Faltava o 'initial: qtdIni' na lista de atualização
+            await updateDoc(doc(db, currentLoja, id), { 
+                nome, 
+                categoria: cat, 
+                initial: qtdIni, // <--- ADICIONEI ISSO AQUI!
+                min, 
+                preco 
+            });
             
             // X-9: Registra que editou
             if (typeof registrarLog === "function") {
-                registrarLog("Edição de Produto", `Alterou dados de: ${nome}`);
+                registrarLog("Edição de Produto", `Alterou dados de: ${nome} (Estoque definido para ${qtdIni})`);
             }
         } 
         else {
