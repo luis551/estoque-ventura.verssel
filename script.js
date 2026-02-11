@@ -599,7 +599,6 @@ window.fecharModal = function() { mProd.classList.remove('active'); }
 const mAdm = document.getElementById('modalAdmin');
 window.abrirAdmin = function() { mAdm.classList.add('active'); renderUsers(); }
 window.fecharAdmin = function() { mAdm.classList.remove('active'); }
-const mRel = document.getElementById('modalRelatorio');
 // --- 8. MODAIS E AUDITORIA ---
 const mRel = document.getElementById('modalRelatorio');
 
