@@ -94,26 +94,31 @@
         </section>
 
         <main class="main-content">
-            <div class="actions-bar">
-                <h2 id="subtituloLoja">Produtos</h2>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn-audit" onclick="window.verDivergencias()">⚠️ Ver Divergências</button>
-                    <button class="btn-week" onclick="window.fecharSemana()">📅 Fechar Semana</button>
-                    <button class="btn-new" onclick="window.abrirModal()">+ Novo Item</button>
-                </div>
-            </div>
+    <div class="actions-bar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+        
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <h2 id="subtituloLoja" style="margin:0;">Produtos</h2>
+            <input type="text" id="inputBusca" placeholder="🔍 Buscar produto..." 
+                   style="padding:8px 12px; border-radius:8px; border:1px solid #ddd; width: 250px; outline: none; font-family: 'Poppins', sans-serif;">
+        </div>
 
-            <div class="table-container">
-                <table id="tabelaProdutos">
-                    <thead>
-                        <tr style="font-size: 0.8rem; text-transform: uppercase;">
-                            </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </main>
+        <div style="display:flex; gap:10px;">
+            <button class="btn-audit" onclick="window.verDivergencias()">⚠️ Ver Divergências</button>
+            <button class="btn-week" onclick="window.fecharSemana()">📅 Fechar Semana</button>
+            <button class="btn-new" onclick="window.abrirModal()">+ Novo Item</button>
+        </div>
     </div>
+
+    <div class="table-container">
+        <table id="tabelaProdutos">
+            <thead>
+                <tr style="font-size: 0.8rem; text-transform: uppercase;">
+                    </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</main>
 
     <div class="modal-overlay" id="modalProduto">
         <div class="modal-box">

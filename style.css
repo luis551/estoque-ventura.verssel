@@ -224,3 +224,40 @@ body.logado .header { width: 100%; }
     border-top: 2px solid #b2bec3;
     border-bottom: 1px solid #b2bec3;
 }
+/* --- ESTILO DA BARRA DE BUSCA BONITONA --- */
+#inputBusca {
+    border: 2px solid #ddd;
+    padding: 10px 15px 10px 40px; /* Espaço para o ícone de lupa */
+    border-radius: 10px;
+    font-size: 0.9rem;
+    width: 220px;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    background: #fff url('https://api.iconify.design/bx/bx-search.svg?color=%23999') no-repeat 12px center;
+    background-size: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    outline: none;
+}
+
+/* Efeito de expansão e brilho ao clicar */
+#inputBusca:focus {
+    border-color: #4070f4;
+    width: 320px; 
+    box-shadow: 0 5px 15px rgba(64, 112, 244, 0.2);
+    background-color: #fff;
+}
+
+/* --- DESTAQUE DE ESTOQUE BAIXO (ALERTA) --- */
+.estoque-critico {
+    background-color: #fff5f5 !important; /* Um fundinho vermelho bem clarinho */
+    transition: background 0.3s;
+}
+
+.estoque-critico:hover {
+    background-color: #ffebeb !important; /* Escurece um pouco no hover */
+}
+
+/* Estilo extra para o texto do alerta na tabela */
+.text-alerta-critico {
+    color: #e74c3c;
+    font-weight: 700;
+}

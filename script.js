@@ -37,7 +37,13 @@ unsubscribeUsers = onSnapshot(usersRef, (snapshot) => {
     users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
     renderUsers(); // Atualiza a tabela sempre que mudar algo no banco
 });
-
+// Faz a busca funcionar em tempo real
+document.addEventListener('input', (e) => {
+    if (e.target.id === 'inputBusca') {
+        const termo = e.target.value.toLowerCase();
+        renderizarInterface(termo);
+    }
+});
 // --- 1. FUNÇÃO PARA TROCAR DE LOJA ---
 window.trocarLoja = function(novaLoja) {
     // VERIFICAÇÃO DE SEGURANÇA MULTI-ACESSO
@@ -308,22 +314,32 @@ window.fecharSemana = async function() {
         alert("Erro: " + e.message); 
     }
 }
-// --- 6. RENDERIZAÇÃO ---
-function renderizarInterface() {
+// --- 6. RENDERIZAÇÃO (ATUALIZADA COM FILTRO DE BUSCA) ---
+function renderizarInterface(filtro = "") {
     const isAdmin = currentUser && currentUser.isAdmin;
     const cardValor = document.getElementById('cardValor');
     const cardAlertas = document.getElementById('cardAlertas');
+    
     if (cardValor && cardAlertas) {
         if (isAdmin) { cardValor.style.display = 'flex'; cardAlertas.style.display = 'flex'; } 
         else { cardValor.style.display = 'none'; cardAlertas.style.display = 'none'; }
     }
-    document.getElementById('totalItens').innerText = itens.length;
-    const valorTotal = itens.reduce((acc, i) => acc + (((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)) * i.preco), 0);
+
+    // Aplica o filtro de busca no nome ou na categoria
+    const itensFiltrados = itens.filter(i => 
+        (i.nome || "").toLowerCase().includes(filtro.toLowerCase()) || 
+        (i.categoria || "").toLowerCase().includes(filtro.toLowerCase())
+    );
+
+    document.getElementById('totalItens').innerText = itensFiltrados.length;
+    
+    const valorTotal = itensFiltrados.reduce((acc, i) => acc + (((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)) * i.preco), 0);
     document.getElementById('valorTotal').innerText = valorTotal.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
-    document.getElementById('alertasBaixos').innerText = itens.filter(i => ((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)) <= i.min).length;
+    document.getElementById('alertasBaixos').innerText = itensFiltrados.filter(i => ((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)) <= i.min).length;
 
     const tbody = document.querySelector('#tabelaProdutos tbody');
     const thead = document.querySelector('#tabelaProdutos thead tr');
+    
     let headerHTML = `<th style="width: 200px;">Produto</th><th class="th-center">INI (+)</th><th class="th-center">ENT (+)</th>`;
     if (isAdmin) { headerHTML += `<th class="th-center">VENDA (-)</th><th class="th-center">CONS (-)</th>`; }
     headerHTML += `<th class="th-center">VALE (-)</th><th class="th-center">AVARIA (-)</th>`;
@@ -331,18 +347,41 @@ function renderizarInterface() {
     headerHTML += `<th class="th-center" style="background:#fffbe6; border:2px solid #f1c40f;">REAL</th>`;
     if (isAdmin) { headerHTML += `<th class="th-center">Status</th>`; }
     headerHTML += `<th class="th-center">Ações</th>`;
+    
     thead.innerHTML = headerHTML;
     tbody.innerHTML = '';
     
-    if (itens.length === 0) { tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:30px; color:#999;">Nada aqui.</td></tr>'; return; }
+    if (itensFiltrados.length === 0) { 
+        tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:30px; color:#999;">Nenhum produto encontrado.</td></tr>'; 
+        return; 
+    }
+
     const grupos = {};
-    itens.forEach(item => { const cat = (item.categoria || 'GERAL').toUpperCase().trim(); if (!grupos[cat]) grupos[cat] = []; grupos[cat].push(item); });
+    // Agrupa usando apenas os itens que passaram pelo filtro
+    itensFiltrados.forEach(item => { 
+        const cat = (item.categoria || 'GERAL').toUpperCase().trim(); 
+        if (!grupos[cat]) grupos[cat] = []; 
+        grupos[cat].push(item); 
+    });
+
     Object.keys(grupos).sort().forEach(categoria => {
         const colspanTotal = isAdmin ? 11 : 7; 
         tbody.innerHTML += `<tr><td colspan="${colspanTotal}" class="cat-header">📂 ${categoria} <span style="font-size:0.8em; opacity:0.6;">(${grupos[categoria].length})</span></td></tr>`;
+        
+        // --- DENTRO DA FUNÇÃO renderizarInterface ---
+// Procure onde começa o: grupos[categoria].sort(...).forEach(item => {
+
         grupos[categoria].sort((a,b) => (a.nome||"").localeCompare(b.nome||"")).forEach(item => {
             const ini=item.initial||0; const ent=item.entry||0; const sale=item.sales||0; const int=item.internal||0; const vou=item.voucher||0; const dam=item.damage||0;
             const sist = ini + ent - sale - int - vou - dam;
+            
+            // --- LOGICA DE ALERTA AQUI ---
+            // Verifica se o estoque do sistema está abaixo ou igual ao mínimo definido
+            const estoqueAbaixoMinimo = sist <= (item.min || 0);
+            const corAlerta = estoqueAbaixoMinimo ? 'color: #e74c3c; font-weight: bold;' : ''; 
+            const iconeAlerta = estoqueAbaixoMinimo ? '⚠️ ' : '';
+            // -----------------------------
+
             let statusHtml = '<span style="color:#ccc">-</span>';
             if (item.real !== '' && item.real !== undefined) {
                 const diff = parseInt(item.real) - sist;
@@ -350,16 +389,31 @@ function renderizarInterface() {
                 else if (diff > 0) statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
                 else statusHtml = `<span class="status-falta">❌ -${Math.abs(diff)}</span>`;
             }
+
             const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
             const acoes = (currentUser && currentUser.canEdit) ? `<button class="btn-action" onclick="window.abrirModal('${item.id}')">✏️</button><button class="btn-action" style="color:red;" onclick="window.deletarProduto('${item.id}')">🗑️</button>` : '🔒';
-            let row = `<td style="padding-left:20px;"><strong>${item.nome}</strong></td><td class="th-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td><td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>`;
+            
+            // Aqui a gente aplica a corAlerta e o iconeAlerta no nome do produto
+            let row = `<td style="padding-left:20px; ${corAlerta}"><strong>${iconeAlerta}${item.nome}</strong></td><td class="th-center" style="background:#f9f9f9; font-weight:bold;">${ini}</td><td><input type="number" class="input-cell" value="${ent}" onchange="window.atualizarValor('${item.id}', 'entry', this.value)" ${readonly}></td>`;
+            
             if (isAdmin) row += `<td><input type="number" class="input-cell" value="${sale}" onchange="window.atualizarValor('${item.id}', 'sales', this.value)" ${readonly}></td><td><input type="number" class="input-cell" value="${int}" onchange="window.atualizarValor('${item.id}', 'internal', this.value)" ${readonly}></td>`;
+            
             row += `<td><input type="number" class="input-cell" value="${vou}" onchange="window.atualizarValor('${item.id}', 'voucher', this.value)" ${readonly}></td><td><input type="number" class="input-cell" value="${dam}" onchange="window.atualizarValor('${item.id}', 'damage', this.value)" ${readonly}></td>`;
+            
             if (isAdmin) row += `<td><span class="text-sistema">${sist}</span></td>`;
+            
             row += `<td><input type="number" class="input-cell input-real" value="${item.real !== undefined ? item.real : ''}" placeholder="-" onchange="window.atualizarValor('${item.id}', 'real', this.value)" ${readonly}></td>`;
+            
             if (isAdmin) row += `<td>${statusHtml}</td>`;
+            
             row += `<td class="th-center">${acoes}</td>`;
-            const tr = document.createElement('tr'); tr.innerHTML = row; tbody.appendChild(tr);
+            
+            const tr = document.createElement('tr'); 
+            // Se estiver baixo, a gente adiciona uma classe CSS na linha toda também
+            if(estoqueAbaixoMinimo) tr.classList.add('estoque-critico');
+            
+            tr.innerHTML = row; 
+            tbody.appendChild(tr);
         });
     });
 }
@@ -547,9 +601,45 @@ window.abrirAdmin = function() { mAdm.classList.add('active'); renderUsers(); }
 window.fecharAdmin = function() { mAdm.classList.remove('active'); }
 const mRel = document.getElementById('modalRelatorio');
 window.verDivergencias = function() { 
-    const l=document.getElementById('listaDivergencias'); l.innerHTML=''; let hasError = false;
-    itens.forEach(i=>{ if(i.real!==''){ const diff=parseInt(i.real)-((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)); if(diff!==0) { hasError = true; const cor = diff > 0 ? 'blue' : 'red'; const sinal = diff > 0 ? '+' : ''; l.innerHTML+=`<li style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;"><span>${i.nome}</span> <b style="color:${cor}">${sinal}${diff}</b></li>`; } } }); 
-    if(!hasError) l.innerHTML = '<li style="padding:15px; text-align:center; color:green;">✅ Tudo certo por aqui!</li>'; mRel.classList.add('active'); 
+    const l = document.getElementById('listaDivergencias'); 
+    l.innerHTML = ''; 
+    let temDivergencia = false;
+
+    itens.forEach(i => { 
+        // Só valida se o campo 'real' tiver algum valor preenchido
+        if(i.real !== '' && i.real !== undefined && i.real !== null) { 
+            const ini = i.initial || 0; 
+            const ent = i.entry || 0; 
+            const sale = i.sales || 0; 
+            const int = i.internal || 0; 
+            const vou = i.voucher || 0; 
+            const dam = i.damage || 0;
+            
+            const sist = ini + ent - sale - int - vou - dam;
+            const real = parseInt(i.real); // Garante que é número
+            const diff = real - sist; 
+
+            if(diff !== 0) { 
+                temDivergencia = true; 
+                const cor = diff > 0 ? '#3498db' : '#e74c3c'; // Azul pra sobra, Vermelho pra falta
+                const sinal = diff > 0 ? '+' : ''; 
+                l.innerHTML += `
+                    <li style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                        <span><strong>${i.nome}</strong></span> 
+                        <span style="color:${cor}; font-weight:bold; background:#f8f9fa; padding:5px 10px; border-radius:6px; border: 1px solid ${cor}33;">
+                            ${sinal}${diff}
+                        </span>
+                    </li>`; 
+            } 
+        } 
+    }); 
+
+    if(!temDivergencia) {
+        l.innerHTML = '<li style="padding:20px; text-align:center; color:#27ae60; font-weight:bold;">✅ Tudo certo! Nenhuma divergência encontrada.</li>'; 
+    }
+    
+    // Abre o modal de relatório
+    document.getElementById('modalRelatorio').classList.add('active'); 
 }
 window.fecharRelatorio = function() { mRel.classList.remove('active'); }
 
@@ -646,3 +736,10 @@ window.abrirLogs = async function() {
 window.fecharLogs = function() {
     mLogs.classList.remove('active');
 }
+// --- ESCUTADOR DA BUSCA ---
+document.addEventListener('input', (e) => {
+    if (e.target.id === 'inputBusca') {
+        const termo = e.target.value.toLowerCase();
+        renderizarInterface(termo); // Chama a renderização passando o que você digitou
+    }
+});
