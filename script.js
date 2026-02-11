@@ -600,13 +600,19 @@ const mAdm = document.getElementById('modalAdmin');
 window.abrirAdmin = function() { mAdm.classList.add('active'); renderUsers(); }
 window.fecharAdmin = function() { mAdm.classList.remove('active'); }
 const mRel = document.getElementById('modalRelatorio');
+// --- 8. MODAIS E AUDITORIA ---
+const mRel = document.getElementById('modalRelatorio');
+
 window.verDivergencias = function() { 
-    const l = document.getElementById('listaDivergencias'); 
-    l.innerHTML = ''; 
+    console.log("Iniciando auditoria..."); // Para você ver no F12 que funcionou
+    const lista = document.getElementById('listaDivergencias'); 
+    if(!lista) return;
+
+    lista.innerHTML = ''; 
     let temDivergencia = false;
 
     itens.forEach(i => { 
-        // Só valida se o campo 'real' tiver algum valor preenchido
+        // Só valida se o campo 'real' tiver algum valor preenchido (não for vazio ou undefined)
         if(i.real !== '' && i.real !== undefined && i.real !== null) { 
             const ini = i.initial || 0; 
             const ent = i.entry || 0; 
@@ -616,18 +622,18 @@ window.verDivergencias = function() {
             const dam = i.damage || 0;
             
             const sist = ini + ent - sale - int - vou - dam;
-            const real = parseInt(i.real); // Garante que é número
+            const real = parseInt(i.real); 
             const diff = real - sist; 
 
             if(diff !== 0) { 
                 temDivergencia = true; 
-                const cor = diff > 0 ? '#3498db' : '#e74c3c'; // Azul pra sobra, Vermelho pra falta
+                const cor = diff > 0 ? '#3498db' : '#e74c3c'; // Azul sobra, Vermelho falta
                 const sinal = diff > 0 ? '+' : ''; 
-                l.innerHTML += `
+                lista.innerHTML += `
                     <li style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
                         <span><strong>${i.nome}</strong></span> 
                         <span style="color:${cor}; font-weight:bold; background:#f8f9fa; padding:5px 10px; border-radius:6px; border: 1px solid ${cor}33;">
-                            ${sinal}${diff}
+                            ${sinal}${diff} (Sist: ${sist} | Real: ${real})
                         </span>
                     </li>`; 
             } 
@@ -635,11 +641,11 @@ window.verDivergencias = function() {
     }); 
 
     if(!temDivergencia) {
-        l.innerHTML = '<li style="padding:20px; text-align:center; color:#27ae60; font-weight:bold;">✅ Tudo certo! Nenhuma divergência encontrada.</li>'; 
+        lista.innerHTML = '<li style="padding:20px; text-align:center; color:#27ae60; font-weight:bold;">✅ Tudo certo! Nenhuma divergência encontrada.</li>'; 
     }
     
-    // Abre o modal de relatório
-    document.getElementById('modalRelatorio').classList.add('active'); 
+    // Garante que o modal abra
+    if(mRel) mRel.classList.add('active'); 
 }
 window.fecharRelatorio = function() { mRel.classList.remove('active'); }
 
