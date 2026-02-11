@@ -603,48 +603,70 @@ window.fecharAdmin = function() { mAdm.classList.remove('active'); }
 const mRel = document.getElementById('modalRelatorio');
 
 window.verDivergencias = function() { 
-    console.log("Iniciando auditoria..."); // Para você ver no F12 que funcionou
-    const lista = document.getElementById('listaDivergencias'); 
-    if(!lista) return;
+    const l = document.getElementById('listaDivergencias'); 
+    l.innerHTML = ''; 
+    let produtosParaRecontar = [];
 
-    lista.innerHTML = ''; 
-    let temDivergencia = false;
-
+    // 1. Identifica quais produtos têm divergência
     itens.forEach(i => { 
-        // Só valida se o campo 'real' tiver algum valor preenchido (não for vazio ou undefined)
         if(i.real !== '' && i.real !== undefined && i.real !== null) { 
-            const ini = i.initial || 0; 
-            const ent = i.entry || 0; 
-            const sale = i.sales || 0; 
-            const int = i.internal || 0; 
-            const vou = i.voucher || 0; 
-            const dam = i.damage || 0;
+            const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
+            const real = parseInt(i.real);
             
-            const sist = ini + ent - sale - int - vou - dam;
-            const real = parseInt(i.real); 
-            const diff = real - sist; 
-
-            if(diff !== 0) { 
-                temDivergencia = true; 
-                const cor = diff > 0 ? '#3498db' : '#e74c3c'; // Azul sobra, Vermelho falta
-                const sinal = diff > 0 ? '+' : ''; 
-                lista.innerHTML += `
-                    <li style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                        <span><strong>${i.nome}</strong></span> 
-                        <span style="color:${cor}; font-weight:bold; background:#f8f9fa; padding:5px 10px; border-radius:6px; border: 1px solid ${cor}33;">
-                            ${sinal}${diff} (Sist: ${sist} | Real: ${real})
-                        </span>
-                    </li>`; 
+            // Se houver qualquer diferença (positiva ou negativa)
+            if(real !== sist) { 
+                produtosParaRecontar.push(i.nome);
             } 
         } 
     }); 
 
-    if(!temDivergencia) {
-        lista.innerHTML = '<li style="padding:20px; text-align:center; color:#27ae60; font-weight:bold;">✅ Tudo certo! Nenhuma divergência encontrada.</li>'; 
+    if(produtosParaRecontar.length === 0) {
+        l.innerHTML = '<li style="padding:20px; text-align:center; color:#27ae60; font-weight:bold;">✅ Tudo certo! Nenhuma divergência encontrada.</li>'; 
+    } else {
+        // 2. Prepara a saudação baseada no horário
+        const hora = new Date().getHours();
+        let saudacao = "Bom dia";
+        if (hora >= 12 && hora < 18) saudacao = "Boa tarde";
+        if (hora >= 18 || hora < 5) saudacao = "Boa noite";
+
+        // 3. Pega o nome da loja atual formatado
+        const nomesLojas = { 
+            'estoque_casa': 'Casa (Central)', 
+            'estoque_ventura': 'Ventura', 
+            'estoque_contento': 'Contento' 
+        };
+        const nomeDaLoja = nomesLojas[currentLoja] || "Loja";
+
+        // 4. Monta a lista visual no modal usando as novas classes CSS
+        let listaHTML = `<div class="relatorio-container">`;
+        listaHTML += `<div class="relatorio-header">
+                        <p><strong>${saudacao},</strong></p>
+                        <p>Preciso que os gerentes da loja <strong>${nomeDaLoja}</strong> recontem os seguintes produtos:</p>
+                      </div>`;
+        
+        listaHTML += `<ul class="lista-recontagem">`;
+        produtosParaRecontar.forEach(prod => {
+            listaHTML += `<li><i class='bx bx-check-double' style='color:#3498db'></i> ${prod}</li>`;
+        });
+        listaHTML += `</ul></div>`;
+        
+        // Botão rápido para copiar o texto (opcional, mas ajuda muito!)
+        listaHTML += `
+            <button onclick="window.copiarRelatorio()" style="margin-top:15px; width:100%; background:#3498db; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer; font-weight:bold;">
+                📋 Copiar para WhatsApp
+            </button>`;
+
+        l.innerHTML = listaHTML;
+
+        // Função extra para copiar o texto direto
+        window.copiarRelatorio = () => {
+            const texto = `${saudacao},\n\nPreciso que os gerentes da loja ${nomeDaLoja} recontem os seguintes produtos:\n\n${produtosParaRecontar.map(p => `• ${p}`).join('\n')}`;
+            navigator.clipboard.writeText(texto);
+            alert("Relatório copiado para a área de transferência! 👍");
+        };
     }
     
-    // Garante que o modal abra
-    if(mRel) mRel.classList.add('active'); 
+    document.getElementById('modalRelatorio').classList.add('active'); 
 }
 window.fecharRelatorio = function() { mRel.classList.remove('active'); }
 
