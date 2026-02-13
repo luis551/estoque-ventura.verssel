@@ -384,10 +384,16 @@ function renderizarInterface(filtro = "") {
 
             let statusHtml = '<span style="color:#ccc">-</span>';
             if (item.real !== '' && item.real !== undefined) {
-                const diff = parseInt(item.real) - sist;
-                if (diff === 0) statusHtml = '<span class="status-ok">✅ OK</span>';
-                else if (diff > 0) statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
-                else statusHtml = `<span class="status-falta">❌ -${Math.abs(diff)}</span>`;
+                const diff = parseInt(item.real) - sist; // Aqui está a diferença real
+                if (diff === 0) {
+                    statusHtml = '<span class="status-ok">✅ OK</span>';
+                } else if (diff > 0) {
+                    statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
+                } else {
+                    // O Math.abs aqui é só pra não aparecer "--200" no texto, 
+                    // mas o erro do 400 vem se você usar ele no cálculo total!
+                    statusHtml = `<span class="status-falta">❌ ${diff}</span>`; 
+                }
             }
 
             const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
