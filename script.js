@@ -388,14 +388,28 @@ document.getElementById('alertasBaixos').innerText = itensFiltrados.filter(i => 
 
             let statusHtml = '<span style="color:#ccc">-</span>';
             if (item.real !== '' && item.real !== undefined) {
-                const diff = parseInt(item.real) - sist; // Diferença matemática pura
                 
+                // --- 🎲 REGRA DA CASA: LÓGICA DO EXPETO ---
+                let diff;
+                const valorReal = parseInt(item.real) || 0; // Garante que seja número
+
+                if (sist < 0) {
+                    // Se o sistema tá negativo (dívida), a gente soma o real com a dívida
+                    // Exemplo: -49 + 30 = -19
+                    diff = sist + valorReal; 
+                } else {
+                    // Se o sistema tá positivo, segue o jogo normal (Real - Sistema)
+                    // Exemplo: Tinha 50, contei 30, então 30 - 50 = -20
+                    diff = valorReal - sist; 
+                }
+                // ------------------------------------------
+
                 if (diff === 0) {
                     statusHtml = '<span class="status-ok">✅ OK</span>';
                 } else if (diff > 0) {
                     statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
                 } else {
-                    // Aqui usamos apenas o diff. Ele já vem com o sinal de "-" do cálculo!
+                    // O diff já vai vir com o sinal de menos (ex: -19)
                     statusHtml = `<span class="status-falta">❌ ${diff}</span>`; 
                 }
             }
