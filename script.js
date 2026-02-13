@@ -335,7 +335,11 @@ function renderizarInterface(filtro = "") {
     
     const valorTotal = itensFiltrados.reduce((acc, i) => acc + (((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)) * i.preco), 0);
     document.getElementById('valorTotal').innerText = valorTotal.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
-    document.getElementById('alertasBaixos').innerText = itensFiltrados.filter(i => ((i.initial||0)+(i.entry||0)-(i.sales||0)-(i.internal||0)-(i.voucher||0)-(i.damage||0)) <= i.min).length;
+    // Conta quantos itens estão com estoque abaixo ou igual ao mínimo
+document.getElementById('alertasBaixos').innerText = itensFiltrados.filter(i => {
+    const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
+    return sist <= (i.min || 0);
+}).length;
 
     const tbody = document.querySelector('#tabelaProdutos tbody');
     const thead = document.querySelector('#tabelaProdutos thead tr');
@@ -384,14 +388,14 @@ function renderizarInterface(filtro = "") {
 
             let statusHtml = '<span style="color:#ccc">-</span>';
             if (item.real !== '' && item.real !== undefined) {
-                const diff = parseInt(item.real) - sist; // Aqui está a diferença real
+                const diff = parseInt(item.real) - sist; // Diferença matemática pura
+                
                 if (diff === 0) {
                     statusHtml = '<span class="status-ok">✅ OK</span>';
                 } else if (diff > 0) {
                     statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
                 } else {
-                    // O Math.abs aqui é só pra não aparecer "--200" no texto, 
-                    // mas o erro do 400 vem se você usar ele no cálculo total!
+                    // Aqui usamos apenas o diff. Ele já vem com o sinal de "-" do cálculo!
                     statusHtml = `<span class="status-falta">❌ ${diff}</span>`; 
                 }
             }

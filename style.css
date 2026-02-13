@@ -313,3 +313,8 @@ body.logado .header { width: 100%; }
     background: #219150;
     transform: scale(1.02);
 }
+#listaDivergencias {
+    padding: 10px;
+    background: #fff;
+    border-radius: 8px;
+}
