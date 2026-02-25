@@ -95,17 +95,20 @@
 
         <main class="main-content">
     <div class="actions-bar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-        
-        <div style="display:flex; flex-direction:column; gap:10px;">
-            <h2 id="subtituloLoja" style="margin:0;">Produtos</h2>
-            <input type="text" id="inputBusca" placeholder="🔍 Buscar produto..." 
-                   style="padding:8px 12px; border-radius:8px; border:1px solid #ddd; width: 250px; outline: none; font-family: 'Poppins', sans-serif;">
-        </div>
+    
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        <h2 id="subtituloLoja" style="margin:0;">Produtos</h2>
+        <input type="text" id="inputBusca" placeholder="🔍 Buscar produto..." 
+               style="padding:8px 12px; border-radius:8px; border:1px solid #ddd; width: 250px; outline: none; font-family: 'Poppins', sans-serif;">
+    </div>
 
-        <div style="display:flex; gap:10px;">
-            <button class="btn-audit" onclick="window.verDivergencias()">⚠️ Ver Divergências</button>
-            <button class="btn-week" onclick="window.fecharSemana()">📅 Fechar Semana</button>
-            <button class="btn-new" onclick="window.abrirModal()">+ Novo Item</button>
+    <div style="display:flex; gap:10px;">
+        <button class="btn-audit" style="background:#2ecc71; color:white;" onclick="window.abrirEntradaRapida()">
+            <i class='bx bx-list-plus'></i> Entrada Rápida
+        </button>
+          <button class="btn-audit" onclick="window.verDivergencias()">⚠️ Ver Divergências</button>
+          <button class="btn-week" onclick="window.fecharSemana()">📅 Fechar Semana</button>
+          <button class="btn-new" onclick="window.abrirModal()">+ Novo Item</button>
         </div>
     </div>
 
@@ -244,6 +247,42 @@
         </div>
         <div class="modal-footer">
             <button class="btn-save" onclick="window.fecharLogs()">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modalLote">
+    <div class="modal-box" style="width: 650px; max-width: 95%;">
+        <div class="modal-header">
+            <h2>🚀 Entrada Rápida (Lote)</h2>
+            <button class="btn-close" onclick="window.fecharLote()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Tipo de Movimento:</label>
+                <select id="lote_tipo" class="login-input" style="margin: 0; padding: 8px; width: 100%;">
+                    <option value="entry">ENTRADA (+)</option>
+                    <option value="sales">VENDA (-)</option>
+                    <option value="internal">CONSUMO (-)</option>
+                    <option value="voucher">VALE (-)</option>
+                    <option value="damage">AVARIA (-)</option>
+                </select>
+            </div>
+            <div style="max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; margin-top: 15px;">
+                <table style="width: 100%;" id="tabelaLote">
+                    <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                        <tr>
+                            <th style="padding: 10px;">Produto</th>
+                            <th style="padding: 10px; text-align: center; width: 100px;">Qtd</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="window.fecharLote()">Cancelar</button>
+            <button class="btn-save" style="background:#2ecc71;" onclick="window.processarLote()">Confirmar Tudo</button>
         </div>
     </div>
 </div>

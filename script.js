@@ -794,3 +794,79 @@ document.addEventListener('input', (e) => {
         renderizarInterface(termo); // Chama a renderização passando o que você digitou
     }
 });
+// --- SISTEMA DE ENTRADA EM LOTE (MODO RÁPIDO) ---
+const mLote = document.getElementById('modalLote');
+
+// 1. Função para abrir a janela e listar os produtos
+window.abrirEntradaRapida = function() {
+    if(!currentUser?.canEdit) return alert('Sem permissão para realizar movimentações!');
+    
+    const tbody = document.querySelector('#tabelaLote tbody');
+    tbody.innerHTML = '';
+
+    // Pega os itens da loja atual e coloca na tabelinha do modal
+    itens.sort((a,b) => (a.nome||"").localeCompare(b.nome||"")).forEach(item => {
+        tbody.innerHTML += `
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;"><strong>${item.nome}</strong></td>
+                <td style="padding: 10px;">
+                    <input type="number" class="input-cell lote-input" 
+                           data-id="${item.id}" data-nome="${item.nome}"
+                           placeholder="0" min="0" 
+                           style="border: 2px solid #4070f4; background: #f0f7ff;">
+                </td>
+            </tr>
+        `;
+    });
+
+    mLote.classList.add('active');
+}
+
+// 2. Função para fechar a janela
+window.fecharLote = () => {
+    mLote.classList.remove('active');
+}
+
+// 3. Função "Mestra" que salva tudo de uma vez no Firebase
+window.processarLote = async function() {
+    const tipo = document.getElementById('lote_tipo').value;
+    const inputs = document.querySelectorAll('.lote-input');
+    const batch = writeBatch(db); // Prepara o "pacote" de atualizações
+    let alterados = 0;
+
+    try {
+        for (let input of inputs) {
+            const qtdAdicionar = parseInt(input.value);
+            
+            // Só processa se você digitou algum número maior que zero
+            if (qtdAdicionar > 0) {
+                const id = input.dataset.id;
+                const nome = input.dataset.nome;
+                const docRef = doc(db, currentLoja, id);
+                
+                // Pega o valor que já existe lá no sistema agora
+                const itemAtual = itens.find(i => i.id === id);
+                const valorAntigo = itemAtual[tipo] || 0;
+                const novoValor = valorAntigo + qtdAdicionar;
+
+                // Adiciona essa mudança na fila do Firebase
+                batch.update(docRef, { [tipo]: novoValor });
+                
+                // Registra no seu sistema de Logs (X-9) 🕵️‍♂️
+                registrarLog("Entrada em Lote", `Adicionou ${qtdAdicionar} em ${tipo.toUpperCase()} para: ${nome}`);
+                alterados++;
+            }
+        }
+
+        if (alterados === 0) return alert("Você não preencheu nenhuma quantidade!");
+
+        // Envia todas as alterações de uma vez só pro banco
+        await batch.commit();
+        alert(`✅ Boa, Expeto! ${alterados} itens atualizados com sucesso.`);
+        window.fecharLote();
+        
+    } catch (e) {
+        console.error("Erro no processamento:", e);
+        alert("Ih, deu erro no Firebase: " + e.message);
+    }
+}
