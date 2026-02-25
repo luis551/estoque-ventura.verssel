@@ -92,33 +92,39 @@ window.trocarLoja = function(novaLoja) {
     });
 }
 
-// --- 2. LOGIN (LÓGICA MULTI-LOJA ATUALIZADA) ---
+// --- 2. LOGIN (VERSÃO CORRIGIDA PARA RENDERIZAÇÃO IMEDIATA) ---
 window.fazerLogin = function() {
     const u = document.getElementById('loginUser').value;
     const p = document.getElementById('loginPass').value;
+    
+    // Busca o usuário na lista carregada do Firebase
     const found = users.find(user => user.user === u && user.pass === p);
 
     if (found) {
-    currentUser = found;
-    if(!currentUser.access) currentUser.access = 'all';
-
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app-content').style.display = 'block';
-    document.getElementById('sidebarLoja').style.display = 'flex';
-    document.body.classList.add('logado');
-
-        const btnLogs = document.getElementById('btnLogsSide');
-    const btnAdmin = document.getElementById('btnAdminSide');
-
-    if(btnLogs) btnLogs.style.display = found.isAdmin ? 'flex' : 'none';
-    if(btnAdmin) btnAdmin.style.display = found.isAdmin ? 'flex' : 'none';
+        currentUser = found;
         
-        // Filtro de Botões da Sidebar (QUEM VÊ O QUE?)
+        // Garante que se não houver campo access, o padrão é 'all'
+        if(!currentUser.access) currentUser.access = 'all';
+
+        // 1. Libera a visualização das telas principais
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app-content').style.display = 'block';
+        document.getElementById('sidebarLoja').style.display = 'flex'; // Importante: Flex para aparecer a barra
+        document.body.classList.add('logado');
+
+        // 2. Controla o acesso administrativo (Logs e Gestão)
+        const btnLogs = document.getElementById('btnLogsSide');
+        const btnAdmin = document.getElementById('btnAdminSide');
+
+        if(btnLogs) btnLogs.style.display = found.isAdmin ? 'flex' : 'none';
+        if(btnAdmin) btnAdmin.style.display = found.isAdmin ? 'flex' : 'none';
+        
+        // 3. Filtro de Botões da Sidebar (Lojas)
         const btnV = document.getElementById('btn-ventura');
         const btnC = document.getElementById('btn-contento');
         const btnCasa = document.getElementById('btn-casa');
 
-        // Esconde todos primeiro
+        // Reseta tudo para 'none' antes de validar as permissões
         if(btnV) btnV.style.display = 'none';
         if(btnC) btnC.style.display = 'none';
         if(btnCasa) btnCasa.style.display = 'none';
@@ -126,26 +132,31 @@ window.fazerLogin = function() {
         const acc = currentUser.access;
         
         if (acc === 'all') {
-            // Se for Total, mostra tudo
+            // Se o acesso for total, força o display flex em todos
             if(btnV) btnV.style.display = 'flex';
             if(btnC) btnC.style.display = 'flex';
             if(btnCasa) btnCasa.style.display = 'flex';
             window.trocarLoja('estoque_ventura');
-        } else if (Array.isArray(acc)) {
-            // Se for lista, mostra só o que tem na lista
+        } 
+        else if (Array.isArray(acc)) {
+            // Se for uma lista (array), libera um por um
             if(acc.includes('estoque_ventura') && btnV) btnV.style.display = 'flex';
             if(acc.includes('estoque_contento') && btnC) btnC.style.display = 'flex';
             if(acc.includes('estoque_casa') && btnCasa) btnCasa.style.display = 'flex';
             
-            // Entra na primeira loja permitida que encontrar
+            // Entra automaticamente na primeira loja que o usuário tem acesso
             if(acc.length > 0) window.trocarLoja(acc[0]);
-        } else {
-            // Suporte legado (caso antigo string única)
+        } 
+        else {
+            // Caso legado (se o acesso for apenas uma string simples)
             window.trocarLoja(acc);
         }
 
+        console.log("🔥 Login realizado com sucesso para:", u);
+
     } else {
-        document.getElementById('loginMsg').innerText = "Senha incorreta!";
+        // Se a senha ou user estiverem errados ou o Firebase ainda não carregou
+        document.getElementById('loginMsg').innerText = "Usuário ou senha incorretos!";
     }
 }
 window.fazerLogout = function() { location.reload(); }
