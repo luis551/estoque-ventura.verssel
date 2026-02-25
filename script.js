@@ -801,29 +801,53 @@ document.addEventListener('input', (e) => {
 // --- SISTEMA DE ENTRADA EM LOTE (MODO RÁPIDO) ---
 const mLote = document.getElementById('modalLote');
 
-// 1. Função para abrir a janela e listar os produtos
+// 1. Função para abrir a janela e listar as categorias
 window.abrirEntradaRapida = function() {
     if(!currentUser?.canEdit) return alert('Sem permissão para realizar movimentações!');
     
+    // Puxa todas as categorias existentes e tira as duplicadas
+    const categorias = [...new Set(itens.map(i => (i.categoria || 'GERAL').toUpperCase().trim()))].sort();
+    
+    // Preenche a caixa de seleção de categorias
+    const selectCat = document.getElementById('lote_categoria');
+    selectCat.innerHTML = `<option value="TODAS">🌟 TODAS AS CATEGORIAS</option>`;
+    categorias.forEach(cat => {
+        selectCat.innerHTML += `<option value="${cat}">📂 ${cat}</option>`;
+    });
+
+    // Renderiza a lista inicial
+    window.renderizarItensLote();
+    mLote.classList.add('active');
+}
+
+// NOVO: Função que desenha a tabela baseada na categoria escolhida
+window.renderizarItensLote = function() {
+    const catSelecionada = document.getElementById('lote_categoria').value;
     const tbody = document.querySelector('#tabelaLote tbody');
     tbody.innerHTML = '';
 
-    // Pega os itens da loja atual e coloca na tabelinha do modal
-    itens.sort((a,b) => (a.nome||"").localeCompare(b.nome||"")).forEach(item => {
+    // Filtra: Mostra tudo ou só a categoria escolhida
+    const itensFiltrados = catSelecionada === "TODAS" 
+        ? itens 
+        : itens.filter(i => (i.categoria || 'GERAL').toUpperCase().trim() === catSelecionada);
+
+    // Escreve na tabela
+    itensFiltrados.sort((a,b) => (a.nome||"").localeCompare(b.nome||"")).forEach(item => {
         tbody.innerHTML += `
             <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 10px;"><strong>${item.nome}</strong></td>
+                <td style="padding: 10px;">
+                    <strong>${item.nome}</strong><br>
+                    <span style="font-size:0.75rem; color:#888;">${item.categoria || 'GERAL'}</span>
+                </td>
                 <td style="padding: 10px;">
                     <input type="number" class="input-cell lote-input" 
                            data-id="${item.id}" data-nome="${item.nome}"
                            placeholder="0" min="0" 
-                           style="border: 2px solid #4070f4; background: #f0f7ff;">
+                           style="border: 2px solid #4070f4; background: #f0f7ff; font-weight:bold;">
                 </td>
             </tr>
         `;
     });
-
-    mLote.classList.add('active');
 }
 
 // 2. Função para fechar a janela
