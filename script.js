@@ -898,3 +898,93 @@ window.processarLote = async function() {
         alert("Ih, deu erro no Firebase: " + e.message);
     }
 }
+// --- SISTEMA DE IMPRESSÃO DE FALTANTES (MAGIA DO EXPETO 🧙‍♂️) ---
+window.imprimirFaltantes = function() {
+    // Rola os dados e filtra os itens que estão com estoque crítico (<= mínimo)
+    const itensFaltantes = itens.filter(i => {
+        const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
+        return sist <= (i.min || 0);
+    });
+
+    // Se não tiver nada faltando, sucesso crítico!
+    if(itensFaltantes.length === 0) {
+        return alert("Tá tranquilo, mestre Expeto! Nenhum item em falta no momento. A taverna tá cheia! 🍻");
+    }
+
+    // Pega o nome maneiro da Loja
+    const nomesLojas = { 
+        'estoque_casa': 'Casa (Central)', 
+        'estoque_ventura': 'Ventura', 
+        'estoque_contento': 'Contento' 
+    };
+    const nomeDaLoja = nomesLojas[currentLoja] || "Loja";
+
+    // Monta o pergaminho (HTML) pra janela de impressão
+    let html = `
+        <html>
+        <head>
+            <title>Relatório de Faltantes - ${nomeDaLoja}</title>
+            <style>
+                body { font-family: 'Arial', sans-serif; padding: 20px; color: #333; }
+                h2 { color: #e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; margin-bottom: 20px;}
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                th { background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 0.9em; }
+                .critico { color: #e74c3c; font-weight: bold; }
+                @media print {
+                    @page { margin: 1cm; }
+                }
+            </style>
+        </head>
+        <body>
+            <h2>🚨 Relatório de Itens Críticos/Faltantes</h2>
+            <p><strong>Guilda/Loja:</strong> ${nomeDaLoja}</p>
+            <p><strong>Data da Consulta:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Categoria</th>
+                        <th style="text-align:center;">Estoque Atual</th>
+                        <th style="text-align:center;">Mínimo Exigido</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    // Preenche a tabela com os itens
+    itensFaltantes.sort((a,b) => (a.nome||"").localeCompare(b.nome||"")).forEach(item => {
+        const sist = (item.initial||0) + (item.entry||0) - (item.sales||0) - (item.internal||0) - (item.voucher||0) - (item.damage||0);
+        html += `
+            <tr>
+                <td><strong>${item.nome}</strong></td>
+                <td>${item.categoria || 'GERAL'}</td>
+                <td style="text-align:center;" class="critico">${sist}</td>
+                <td style="text-align:center;">${item.min || 0}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+            </table>
+            
+            <script>
+                // Quando a janela terminar de carregar, invoca a impressão e fecha
+                window.onload = function() { 
+                    setTimeout(() => {
+                        window.print(); 
+                        window.close(); 
+                    }, 250);
+                }
+            </script>
+        </body>
+        </html>
+    `;
+
+    // Abre uma nova aba secreta e manda imprimir
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(html);
+    printWindow.document.close();
+}
