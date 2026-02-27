@@ -285,35 +285,57 @@ window.deletarProduto = async function(id) {
         }
     }
 }
-// --- 6. FECHAR SEMANA (COM LOG GERAL) ---
+import { serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"; // Adicione isso lá no topo junto com as outras importações se não tiver
+
+// --- 6. FECHAR SEMANA (ATUALIZADA COM SAVE STATE NO HISTÓRICO 💾) ---
 window.fecharSemana = async function() {
     if(!currentUser || !currentUser.isAdmin) return alert("Apenas Admin!");
     
-    if(!confirm(`⚠️ FECHAR CAIXA?\n\nO estoque REAL vira o INICIAL.\nEntradas/Saídas zeram.\nConfirma?`)) return;
+    if(!confirm(`⚠️ FECHAR CAIXA?\n\nO sistema vai salvar um BKP desta semana, o estoque REAL vira o INICIAL, e as Entradas/Saídas zeram.\nConfirma?`)) return;
 
     try {
         const batch = writeBatch(db);
         
+        // 1. Prepara a "Foto" (Snapshot) de como o estoque tá agora
+        const fotoDoEstoque = itens.map(i => {
+            const ini=i.initial||0; const ent=i.entry||0; const sale=i.sales||0; const int=i.internal||0; const vou=i.voucher||0; const dam=i.damage||0;
+            const sist = ini + ent - sale - int - vou - dam;
+            return {
+                nome: i.nome || 'Sem nome',
+                categoria: i.categoria || 'GERAL',
+                ini, ent, sale, int, vou, dam, sist,
+                real: i.real !== undefined ? i.real : ''
+            };
+        });
+
+        // 2. Salva essa foto na coleção 'historico'
+        const docHistoricoRef = doc(collection(db, "historico"));
+        batch.set(docHistoricoRef, {
+            loja: currentLoja,
+            dataFechamento: new Date().toISOString(), // Grava a data exata
+            fechadoPor: currentUser.user,
+            itens: fotoDoEstoque
+        });
+        
+        // 3. Zera o estoque da semana atual (igual era antes)
         itens.forEach(i => {
             const docRef = doc(db, currentLoja, i.id);
             const ini=i.initial||0; const ent=i.entry||0; const sale=i.sales||0; const int=i.internal||0; const vou=i.voucher||0; const dam=i.damage||0;
             
-            // Calcula o novo inicial baseado no Real ou no Sistema
             let novoInicial = ini + ent - sale - int - vou - dam;
             if (i.real !== '' && i.real !== undefined) novoInicial = parseInt(i.real);
             
-            // Prepara a atualização
             batch.update(docRef, { initial: novoInicial, entry: 0, sales: 0, internal: 0, voucher: 0, damage: 0, real: '' });
         });
 
+        // Executa tudo de uma vez (Salva histórico e zera atual)
         await batch.commit();
         
-        // X-9: Registra que a semana fechou
         if (typeof registrarLog === "function") {
-            registrarLog("Fechamento de Caixa", `Zerou movimentos e atualizou estoque inicial de ${itens.length} itens.`);
+            registrarLog("Fechamento de Caixa", `Gerou Histórico e zerou caixa da semana.`);
         }
         
-        alert(`✅ Semana fechada com sucesso!`);
+        alert(`✅ Save State criado e semana fechada com sucesso, mestre!`);
     } catch(e) { 
         alert("Erro: " + e.message); 
     }
@@ -987,4 +1009,92 @@ window.imprimirFaltantes = function() {
     const printWindow = window.open('', '_blank');
     printWindow.document.write(html);
     printWindow.document.close();
+}
+// --- SISTEMA DE HISTÓRICO (SOMENTE LEITURA 🕰️) ---
+
+window.fecharListaHistorico = () => document.getElementById('modalListaHistorico').classList.remove('active');
+window.fecharVerHistorico = () => document.getElementById('modalVerHistorico').classList.remove('active');
+
+let historicosCarregados = []; // Variável pra guardar o array de BKP
+
+window.abrirHistorico = async function() {
+    document.getElementById('modalListaHistorico').classList.add('active');
+    const lista = document.getElementById('listaSemanasAntigas');
+    const loading = document.getElementById('loadingHistorico');
+    
+    lista.innerHTML = '';
+    loading.style.display = 'block';
+
+    try {
+        // Busca os históricos SÓ da loja atual, do mais novo pro mais antigo
+        const q = query(
+            collection(db, "historico"), 
+            where("loja", "==", currentLoja),
+            orderBy("dataFechamento", "desc"),
+            limit(10) // Puxa os últimos 10 fechamentos
+        );
+        
+        const querySnapshot = await getDocs(q);
+        loading.style.display = 'none';
+
+        if (querySnapshot.empty) {
+            lista.innerHTML = '<li style="text-align:center; padding:15px; color:#999;">Nenhum fechamento passado registrado pra essa taverna ainda. 🏜️</li>';
+            return;
+        }
+
+        historicosCarregados = [];
+        
+        querySnapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            data.id = docSnap.id;
+            historicosCarregados.push(data);
+            
+            const dataFormatada = new Date(data.dataFechamento).toLocaleString('pt-BR');
+            
+            lista.innerHTML += `
+                <li style="border-bottom:1px solid #eee; padding:10px 0; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong>🗓️ ${dataFormatada}</strong><br>
+                        <span style="font-size:0.8rem; color:#888;">Fechado por: ${data.fechadoPor}</span>
+                    </div>
+                    <button onclick="window.visualizarSemanaDetalhe('${data.id}')" style="background:#3498db; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">Ver</button>
+                </li>
+            `;
+        });
+
+    } catch(e) {
+        console.error(e);
+        loading.innerHTML = `<span style="color:red">Erro: Lembre de criar o Índice no Firebase se ele pedir no Console F12!</span>`;
+    }
+}
+
+window.visualizarSemanaDetalhe = function(idHistorico) {
+    const BKP = historicosCarregados.find(h => h.id === idHistorico);
+    if(!BKP) return;
+
+    const dataFormatada = new Date(BKP.dataFechamento).toLocaleString('pt-BR');
+    document.getElementById('tituloSemanaAntiga').innerText = `📅 Fechamento: ${dataFormatada}`;
+    
+    const tbody = document.getElementById('tabelaSemanaAntiga');
+    tbody.innerHTML = '';
+
+    // Organiza por ordem alfabética antes de mostrar
+    BKP.itens.sort((a,b) => a.nome.localeCompare(b.nome)).forEach(item => {
+        const totalSaidas = (item.sale||0) + (item.int||0) + (item.vou||0) + (item.dam||0);
+        
+        tbody.innerHTML += `
+            <tr style="border-bottom:1px solid #eee;">
+                <td style="padding:10px;"><strong>${item.nome}</strong><br><span style="font-size:0.75rem;color:#888;">${item.categoria}</span></td>
+                <td style="padding:10px; text-align:center;">${item.ini}</td>
+                <td style="padding:10px; text-align:center; color:#2ecc71;">+${item.ent}</td>
+                <td style="padding:10px; text-align:center; color:#e74c3c;">-${totalSaidas}</td>
+                <td style="padding:10px; text-align:center; font-weight:bold; background:#f0f0f0;">${item.sist}</td>
+                <td style="padding:10px; text-align:center; font-weight:bold; color:#f39c12;">${item.real !== '' ? item.real : '-'}</td>
+            </tr>
+        `;
+    });
+
+    // Esconde a lista e mostra os detalhes
+    window.fecharListaHistorico();
+    document.getElementById('modalVerHistorico').classList.add('active');
 }

@@ -111,6 +111,9 @@
         </button>
         <button class="btn-audit" onclick="window.verDivergencias()">⚠️ Ver Divergências</button>
         <button class="btn-week" onclick="window.fecharSemana()">📅 Fechar Semana</button>
+        <button class="btn-audit" style="background:#34495e; color:white;" onclick="window.abrirHistorico()">
+            🕰️ Histórico
+        </button>
         <button class="btn-new" onclick="window.abrirModal()">+ Novo Item</button>
     </div>>
     </div>
@@ -301,6 +304,45 @@
         </div>
     </div>
 </div>
+<div class="modal-overlay" id="modalListaHistorico">
+        <div class="modal-box" style="width: 400px;">
+            <div class="modal-header">
+                <h2>🕰️ Arquivos da Guilda</h2>
+                <button class="btn-close" onclick="window.fecharListaHistorico()"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 10px; font-size: 0.9rem; color: #666;">Selecione um fechamento anterior para visualizar (Apenas Leitura):</p>
+                <div id="loadingHistorico" style="text-align:center; padding:10px; display:none;">Buscando pergaminhos... 📜</div>
+                <ul id="listaSemanasAntigas" style="list-style:none; max-height:300px; overflow-y:auto;">
+                    </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalVerHistorico">
+        <div class="modal-box" style="width: 90%; max-width: 1000px;">
+            <div class="modal-header">
+                <h2 id="tituloSemanaAntiga">📅 Fechamento Passado</h2>
+                <button class="btn-close" onclick="window.fecharVerHistorico()"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background:#f8f9fa; text-align:left;">
+                            <th style="padding:10px; border-bottom:1px solid #ddd;">Produto</th>
+                            <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">INI</th>
+                            <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">ENT</th>
+                            <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">SAÍDAS</th>
+                            <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">SISTEMA</th>
+                            <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">REAL CONFERIDO</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaSemanaAntiga">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="script.js"></script>
 </body>
