@@ -920,17 +920,31 @@ window.processarLote = async function() {
         alert("Ih, deu erro no Firebase: " + e.message);
     }
 }
-// --- SISTEMA DE IMPRESSÃO DE FALTANTES (MAGIA DO EXPETO 🧙‍♂️) ---
+// --- SISTEMA DE IMPRESSÃO DE FALTANTES (REFATORADO: QUEBRA/DIVERGÊNCIA) 🧙‍♂️ ---
 window.imprimirFaltantes = function() {
-    // Rola os dados e filtra os itens que estão com estoque crítico (<= mínimo)
-    const itensFaltantes = itens.filter(i => {
-        const sist = (i.initial||0) + (i.entry||0) - (i.sales||0) - (i.internal||0) - (i.voucher||0) - (i.damage||0);
-        return sist <= (i.min || 0);
+    // Rola os dados e filtra SÓ os itens que tiveram contagem REAL e deram diferença NEGATIVA
+    const itensFaltantes = itens.filter(item => {
+        // Se a galera não preencheu o campo REAL, a gente ignora o item
+        if (item.real === '' || item.real === undefined) return false;
+
+        const sist = (item.initial||0) + (item.entry||0) - (item.sales||0) - (item.internal||0) - (item.voucher||0) - (item.damage||0);
+        const valorReal = parseInt(item.real) || 0;
+        let diff;
+
+        // A mesma magia de cálculo do Expeto
+        if (sist < 0) {
+            diff = sist + valorReal; 
+        } else {
+            diff = valorReal - sist; 
+        }
+
+        // Retorna o item pro pergaminho só se a diferença for negativa (FALTA)
+        return diff < 0;
     });
 
-    // Se não tiver nada faltando, sucesso crítico!
+    // Se não tiver nenhuma quebra, sucesso crítico!
     if(itensFaltantes.length === 0) {
-        return alert("Tá tranquilo, mestre Expeto! Nenhum item em falta no momento. A taverna tá cheia! 🍻");
+        return alert("Tá tranquilo, mestre Expeto! Nenhuma FALTA detectada na conferência de hoje. 🍻");
     }
 
     // Pega o nome maneiro da Loja
@@ -945,7 +959,7 @@ window.imprimirFaltantes = function() {
     let html = `
         <html>
         <head>
-            <title>Relatório de Faltantes - ${nomeDaLoja}</title>
+            <title>Relatório de Quebras - ${nomeDaLoja}</title>
             <style>
                 body { font-family: 'Arial', sans-serif; padding: 20px; color: #333; }
                 h2 { color: #e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; margin-bottom: 20px;}
@@ -959,7 +973,7 @@ window.imprimirFaltantes = function() {
             </style>
         </head>
         <body>
-            <h2>🚨 Relatório de Itens Críticos/Faltantes</h2>
+            <h2>🚨 Relatório de Faltas (Quebra de Estoque)</h2>
             <p><strong>Guilda/Loja:</strong> ${nomeDaLoja}</p>
             <p><strong>Data da Consulta:</strong> ${new Date().toLocaleString('pt-BR')}</p>
             
@@ -968,8 +982,9 @@ window.imprimirFaltantes = function() {
                     <tr>
                         <th>Produto</th>
                         <th>Categoria</th>
-                        <th style="text-align:center;">Estoque Atual</th>
-                        <th style="text-align:center;">Mínimo Exigido</th>
+                        <th style="text-align:center;">Sistema</th>
+                        <th style="text-align:center;">Real (Conferido)</th>
+                        <th style="text-align:center;">Diferença (Falta)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -978,12 +993,18 @@ window.imprimirFaltantes = function() {
     // Preenche a tabela com os itens
     itensFaltantes.sort((a,b) => (a.nome||"").localeCompare(b.nome||"")).forEach(item => {
         const sist = (item.initial||0) + (item.entry||0) - (item.sales||0) - (item.internal||0) - (item.voucher||0) - (item.damage||0);
+        const valorReal = parseInt(item.real) || 0;
+        let diff;
+        
+        if (sist < 0) { diff = sist + valorReal; } else { diff = valorReal - sist; }
+
         html += `
             <tr>
                 <td><strong>${item.nome}</strong></td>
                 <td>${item.categoria || 'GERAL'}</td>
-                <td style="text-align:center;" class="critico">${sist}</td>
-                <td style="text-align:center;">${item.min || 0}</td>
+                <td style="text-align:center;">${sist}</td>
+                <td style="text-align:center;">${valorReal}</td>
+                <td style="text-align:center;" class="critico">${diff}</td>
             </tr>
         `;
     });
