@@ -920,34 +920,25 @@ window.processarLote = async function() {
         alert("Ih, deu erro no Firebase: " + e.message);
     }
 }
-// --- SISTEMA DE IMPRESSÃO DE FALTANTES (REFATORADO: QUEBRA/DIVERGÊNCIA) 🧙‍♂️ ---
+// --- SISTEMA DE IMPRESSÃO DE FALTANTES (RESUMO COMPLETO) 🧙‍♂️ ---
 window.imprimirFaltantes = function() {
-    // Rola os dados e filtra SÓ os itens que tiveram contagem REAL e deram diferença NEGATIVA
+    const isAdmin = currentUser && currentUser.isAdmin;
+
+    // Filtra SÓ os itens que tiveram contagem REAL e deram diferença NEGATIVA
     const itensFaltantes = itens.filter(item => {
-        // Se a galera não preencheu o campo REAL, a gente ignora o item
         if (item.real === '' || item.real === undefined) return false;
 
         const sist = (item.initial||0) + (item.entry||0) - (item.sales||0) - (item.internal||0) - (item.voucher||0) - (item.damage||0);
         const valorReal = parseInt(item.real) || 0;
-        let diff;
+        let diff = (sist < 0) ? (sist + valorReal) : (valorReal - sist);
 
-        // A mesma magia de cálculo do Expeto
-        if (sist < 0) {
-            diff = sist + valorReal; 
-        } else {
-            diff = valorReal - sist; 
-        }
-
-        // Retorna o item pro pergaminho só se a diferença for negativa (FALTA)
         return diff < 0;
     });
 
-    // Se não tiver nenhuma quebra, sucesso crítico!
     if(itensFaltantes.length === 0) {
-        return alert("Tá tranquilo, mestre Expeto! Nenhuma FALTA detectada na conferência de hoje. 🍻");
+        return alert("Tá tranquilo, mestre! Nenhuma FALTA detectada para imprimir. 🍻");
     }
 
-    // Pega o nome maneiro da Loja
     const nomesLojas = { 
         'estoque_casa': 'Casa (Central)', 
         'estoque_ventura': 'Ventura', 
@@ -955,56 +946,66 @@ window.imprimirFaltantes = function() {
     };
     const nomeDaLoja = nomesLojas[currentLoja] || "Loja";
 
-    // Monta o pergaminho (HTML) pra janela de impressão
     let html = `
         <html>
         <head>
             <title>Relatório de Quebras - ${nomeDaLoja}</title>
             <style>
-                body { font-family: 'Arial', sans-serif; padding: 20px; color: #333; }
-                h2 { color: #e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; margin-bottom: 20px;}
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-                th { background-color: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 0.9em; }
-                .critico { color: #e74c3c; font-weight: bold; }
-                @media print {
-                    @page { margin: 1cm; }
-                }
+                body { font-family: 'Poppins', Arial, sans-serif; padding: 20px; color: #333; }
+                h2 { color: #e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; margin-bottom: 5px;}
+                .header-info { margin-bottom: 20px; font-size: 0.9rem; color: #666; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+                th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+                th { background-color: #f2f2f2; font-weight: bold; text-transform: uppercase; }
+                .text-left { text-align: left; }
+                .critico { color: #e74c3c; font-weight: bold; background: #fff5f5; }
+                .col-destaque { background: #f9f9f9; font-weight: bold; }
+                @media print { @page { margin: 1cm; } }
             </style>
         </head>
         <body>
-            <h2>🚨 Relatório de Faltas (Quebra de Estoque)</h2>
-            <p><strong>Guilda/Loja:</strong> ${nomeDaLoja}</p>
-            <p><strong>Data da Consulta:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+            <h2>🚨 Relatório de Quebras e Movimentação</h2>
+            <div class="header-info">
+                <strong>Loja:</strong> ${nomeDaLoja} | 
+                <strong>Data:</strong> ${new Date().toLocaleString('pt-BR')} | 
+                <strong>Responsável:</strong> ${currentUser.user}
+            </div>
             
             <table>
                 <thead>
                     <tr>
-                        <th>Produto</th>
-                        <th>Categoria</th>
-                        <th style="text-align:center;">Sistema</th>
-                        <th style="text-align:center;">Real (Conferido)</th>
-                        <th style="text-align:center;">Diferença (Falta)</th>
+                        <th class="text-left">Produto</th>
+                        <th>INI</th>
+                        <th>ENT</th>
+                        ${isAdmin ? '<th>VEND</th><th>CONS</th>' : ''}
+                        <th>VALE</th>
+                        <th>AVAR</th>
+                        <th class="col-destaque">SIST</th>
+                        <th class="col-destaque">REAL</th>
+                        <th class="critico">FALTA</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
 
-    // Preenche a tabela com os itens
     itensFaltantes.sort((a,b) => (a.nome||"").localeCompare(b.nome||"")).forEach(item => {
-        const sist = (item.initial||0) + (item.entry||0) - (item.sales||0) - (item.internal||0) - (item.voucher||0) - (item.damage||0);
+        const ini=item.initial||0; const ent=item.entry||0; const sale=item.sales||0; 
+        const int=item.internal||0; const vou=item.voucher||0; const dam=item.damage||0;
+        const sist = ini + ent - sale - int - vou - dam;
         const valorReal = parseInt(item.real) || 0;
-        let diff;
-        
-        if (sist < 0) { diff = sist + valorReal; } else { diff = valorReal - sist; }
+        let diff = (sist < 0) ? (sist + valorReal) : (valorReal - sist);
 
         html += `
             <tr>
-                <td><strong>${item.nome}</strong></td>
-                <td>${item.categoria || 'GERAL'}</td>
-                <td style="text-align:center;">${sist}</td>
-                <td style="text-align:center;">${valorReal}</td>
-                <td style="text-align:center;" class="critico">${diff}</td>
+                <td class="text-left"><strong>${item.nome}</strong></td>
+                <td>${ini}</td>
+                <td>${ent}</td>
+                ${isAdmin ? `<td>${sale}</td><td>${int}</td>` : ''}
+                <td>${vou}</td>
+                <td>${dam}</td>
+                <td class="col-destaque">${sist}</td>
+                <td class="col-destaque">${valorReal}</td>
+                <td class="critico">${diff}</td>
             </tr>
         `;
     });
@@ -1012,21 +1013,18 @@ window.imprimirFaltantes = function() {
     html += `
                 </tbody>
             </table>
-            
+            <div style="margin-top: 30px; border-top: 1px solid #ccc; padding-top: 10px; font-size: 0.8rem; text-align: center;">
+                Documento gerado pelo Sistema de Gestão Ventura.
+            </div>
             <script>
-                // Quando a janela terminar de carregar, invoca a impressão e fecha
                 window.onload = function() { 
-                    setTimeout(() => {
-                        window.print(); 
-                        window.close(); 
-                    }, 250);
+                    setTimeout(() => { window.print(); window.close(); }, 300);
                 }
             </script>
         </body>
         </html>
     `;
 
-    // Abre uma nova aba secreta e manda imprimir
     const printWindow = window.open('', '_blank');
     printWindow.document.write(html);
     printWindow.document.close();
