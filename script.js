@@ -412,34 +412,30 @@ document.getElementById('alertasBaixos').innerText = itensFiltrados.filter(i => 
             const iconeAlerta = estoqueAbaixoMinimo ? '⚠️ ' : '';
             // -----------------------------
 
+            // --- 🎲 REGRA DO EXPETO: CONFERÊNCIA POR VALOR ABSOLUTO ---
             let statusHtml = '<span style="color:#ccc">-</span>';
-            if (item.real !== '' && item.real !== undefined) {
-                
-                // --- 🎲 REGRA DA CASA: LÓGICA DO EXPETO ---
-                let diff;
-                const valorReal = parseInt(item.real) || 0; // Garante que seja número
 
+            if (item.real !== '' && item.real !== undefined) {
+                const valorReal = parseInt(item.real) || 0;
+                const sist = (item.initial||0) + (item.entry||0) - (item.sales||0) - (item.internal||0) - (item.voucher||0) - (item.damage||0);
+                
+                let diff;
+
+                // Se o sistema está negativo, tratamos o real como a correção direta do saldo
                 if (sist < 0) {
-                    // Se o sistema tá negativo (dívida), a gente soma o real com a dívida
-                    // Exemplo: -49 + 30 = -19
                     diff = sist + valorReal; 
                 } else {
-                    // Se o sistema tá positivo, segue o jogo normal (Real - Sistema)
-                    // Exemplo: Tinha 50, contei 30, então 30 - 50 = -20
                     diff = valorReal - sist; 
                 }
-                // ------------------------------------------
 
                 if (diff === 0) {
                     statusHtml = '<span class="status-ok">✅ OK</span>';
                 } else if (diff > 0) {
                     statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
                 } else {
-                    // O diff já vai vir com o sinal de menos (ex: -19)
                     statusHtml = `<span class="status-falta">❌ ${diff}</span>`; 
                 }
             }
-
             const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
             const acoes = (currentUser && currentUser.canEdit) ? `<button class="btn-action" onclick="window.abrirModal('${item.id}')">✏️</button><button class="btn-action" style="color:red;" onclick="window.deletarProduto('${item.id}')">🗑️</button>` : '🔒';
             
@@ -877,47 +873,68 @@ window.fecharLote = () => {
     mLote.classList.remove('active');
 }
 
-// 3. Função "Mestra" que salva tudo de uma vez no Firebase
 window.processarLote = async function() {
     const tipo = document.getElementById('lote_tipo').value;
     const inputs = document.querySelectorAll('.lote-input');
-    const batch = writeBatch(db); // Prepara o "pacote" de atualizações
+    const batch = writeBatch(db); // Prepara o pacote de atualizações
     let alterados = 0;
 
     try {
+        // Precisamos usar um loop for...of para conseguir usar await dentro
         for (let input of inputs) {
-            const qtdAdicionar = parseInt(input.value);
+            const qtdMovimentada = parseInt(input.value);
             
-            // Só processa se você digitou algum número maior que zero
-            if (qtdAdicionar > 0) {
+            // Só processa se o valor for maior que zero
+            if (qtdMovimentada > 0) {
                 const id = input.dataset.id;
                 const nome = input.dataset.nome;
                 const docRef = doc(db, currentLoja, id);
                 
-                // Pega o valor que já existe lá no sistema agora
+                // 1. Pega o item local para atualizar o saldo da loja atual
                 const itemAtual = itens.find(i => i.id === id);
                 const valorAntigo = itemAtual[tipo] || 0;
-                const novoValor = valorAntigo + qtdAdicionar;
+                const novoValor = valorAntigo + qtdMovimentada;
 
-                // Adiciona essa mudança na fila do Firebase
+                // Adiciona a atualização da loja atual no batch
                 batch.update(docRef, { [tipo]: novoValor });
+
+                // 2. LÓGICA DE INTEGRAÇÃO COM A CASA (Apenas para ENTRADAS)
+                // Se não estivermos na loja casa e o movimento for 'entry' (Entrada)
+                if (currentLoja !== 'estoque_casa' && tipo === 'entry') {
+                    const casaRef = collection(db, "estoque_casa");
+                    const q = query(casaRef, where("nome", "==", nome));
+                    const querySnapshot = await getDocs(q);
+
+                    if (!querySnapshot.empty) {
+                        querySnapshot.forEach((docCasa) => {
+                            const estoqueAtualCasa = docCasa.data().initial || 0;
+                            const novoEstoqueCasa = estoqueAtualCasa - qtdMovimentada;
+                            
+                            // Adiciona o abatimento da Central no mesmo pacote
+                            batch.update(doc(db, "estoque_casa", docCasa.id), { 
+                                initial: novoEstoqueCasa 
+                            });
+                        });
+                    }
+                }
                 
-                // Registra no seu sistema de Logs (X-9) 🕵️‍♂️
-                registrarLog("Entrada em Lote", `Adicionou ${qtdAdicionar} em ${tipo.toUpperCase()} para: ${nome}`);
+                // Registra o log da operação
+                registrarLog("Entrada em Lote", `${nome}: +${qtdMovimentada} em ${tipo.toUpperCase()}`);
                 alterados++;
             }
         }
 
-        if (alterados === 0) return alert("Você não preencheu nenhuma quantidade!");
+        if (alterados === 0) return alert("Nenhuma quantidade preenchida!");
 
-        // Envia todas as alterações de uma vez só pro banco
+        // Envia todas as alterações (Loja atual + Abatimentos na Casa) de uma vez só
         await batch.commit();
-        alert(`✅ Boa, Expeto! ${alterados} itens atualizados com sucesso.`);
+        
+        alert(`✅ Sucesso! ${alterados} itens atualizados e abatidos da Central.`);
         window.fecharLote();
         
     } catch (e) {
-        console.error("Erro no processamento:", e);
-        alert("Ih, deu erro no Firebase: " + e.message);
+        console.error("Erro no processamento em lote:", e);
+        alert("Erro ao processar lote: " + e.message);
     }
 }
 // --- SISTEMA DE IMPRESSÃO DE FALTANTES (RESUMO COMPLETO) 🧙‍♂️ ---
