@@ -421,19 +421,29 @@ document.getElementById('alertasBaixos').innerText = itensFiltrados.filter(i => 
                 
                 let diff;
 
-                // Se o sistema está negativo, tratamos o real como a correção direta do saldo
                 if (sist < 0) {
+                    // 🚨 SISTEMA NEGATIVO (Nunca vai ser OK!)
                     diff = sist + valorReal; 
+                    
+                    if (diff === 0) {
+                        // Matematicamente deu 0, mas como estava negativo, acusamos o erro!
+                        statusHtml = '<span class="status-falta" title="Sistema estava negativo">❌ ERRO (Sist -)</span>';
+                    } else if (diff > 0) {
+                        statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
+                    } else {
+                        statusHtml = `<span class="status-falta">❌ ${diff}</span>`; 
+                    }
                 } else {
+                    // 🟢 SISTEMA NORMAL (Positivo ou Zerado)
                     diff = valorReal - sist; 
-                }
-
-                if (diff === 0) {
-                    statusHtml = '<span class="status-ok">✅ OK</span>';
-                } else if (diff > 0) {
-                    statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
-                } else {
-                    statusHtml = `<span class="status-falta">❌ ${diff}</span>`; 
+                    
+                    if (diff === 0) {
+                        statusHtml = '<span class="status-ok">✅ OK</span>';
+                    } else if (diff > 0) {
+                        statusHtml = `<span class="status-sobra">⚠️ +${diff}</span>`;
+                    } else {
+                        statusHtml = `<span class="status-falta">❌ ${diff}</span>`; 
+                    }
                 }
             }
             const readonly = (currentUser && currentUser.canEdit) ? '' : 'disabled';
